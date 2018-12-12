@@ -1,0 +1,146 @@
+
+library(MASS)
+library(tidyverse)
+library(statsr)
+library(BAS)
+library(broom)
+
+movies <- movies %>% mutate(feature_film = ifelse(title_type == "Feature Film", "yes", "no"))
+movies <- movies %>% mutate(drama = ifelse(genre == "Drama", "yes", "no"))
+movies <- movies %>% mutate(mpaa_rating_R = ifelse(mpaa_rating == "R", "yes", "no"))
+
+movies <- movies %>% mutate(oscar_season = ifelse(thtr_rel_month == 10 | thtr_rel_month == 11 | thtr_rel_month == 12, "yes", "no"))
+movies <- movies %>% mutate(summer_season = ifelse(thtr_rel_month == 5 | thtr_rel_month == 6 | thtr_rel_month == 7 | thtr_rel_month == 8, "yes", "no"))
+
+----------------------------------------------------------------------------------------------------
+
+EDA
+
+1.ggplot(movies, aes(x = factor(summer_season), y = audience_score)) + geom_boxplot()	- No diff in rating
+ggplot(movies, aes(x = factor(oscar_season), y = audience_score)) + geom_boxplot() 	- No diff in rating
+
+2.ggplot(movies, aes(x = factor(feature_film), y = audience_score)) + geom_boxplot()	- More score for the non-feature films
+
+movies %>% group_by(drama) %>% summarise(min=min(audience_score), max=max(audience_score), iqr=IQR(audience_score), sd=sd(audience_score))
+ggplot(movies, aes(x = factor(drama), y = audience_score)) + geom_boxplot()			- Non drama has much variability of the scores
+
+movies %>% group_by(mpaa_rating_R) %>% summarise(min=min(audience_score), max=max(audience_score), iqr=IQR(audience_score), sd=sd(audience_score))
+ggplot(movies, aes(x = factor(mpaa_rating_R), y = audience_score)) + geom_boxplot()	- No diff
+
+----------------------------------------------------------------------------------------------------
+
+Model Seletion
+
+bma_movie <- bas.lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + oscar_season + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, data = na.omit(movies),
+                   prior = "BIC", 
+                   modelprior = uniform())
+
+movies_no_na <- na.omit(movies)
+
+mlm_movie <- lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + oscar_season + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, data = movies_no_na)
+
+BIC(mlm_movie)	4716.774
+
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + oscar_season + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win, data = movies_no_na))	4710.428 -> remove top200_box
+
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win, data = movies_no_na))	4704.099	-> remove oscar_season
+
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actor_win + best_actress_win + best_dir_win, data = movies_no_na))	4698.11 -> remove best_pic_win
+
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actor_win + best_actress_win, data = movies_no_na))	4692.601 -> remove best_dir_win
+
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))	4687.432 -> remove best_actor_win
+
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))	4682.776.-> remove summer_season
+
+BIC(lm(audience_score ~ drama + runtime + mpaa_rating_R + thtr_rel_year + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))	4678.23 -> remove feature_film
+
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + thtr_rel_year + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actress_win, data = movies_no_na)) 4673.041 -> remove drame
+
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + thtr_rel_year + imdb_rating + critics_score + best_pic_nom + best_actress_win, data = movies_no_na)) 4668.281 -> remove imdb_num_votes
+
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + imdb_rating + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))	4663.531 -> remove thtr_rel_year
+
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + imdb_rating + critics_score + best_pic_nom, data = movies_no_na))	4660.204 -> remove best_actress_win
+
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + imdb_rating + critics_score, data = movies_no_na))	4656.76 -> remove best_pic_nom
+
+BIC(lm(audience_score ~ runtime + imdb_rating + critics_score, data = movies_no_na))	4653.581 -> remove mpaa_rating_R
+
+min(BIC(lm(audience_score ~ imdb_rating + critics_score, data = movies_no_na)),
+BIC(lm(audience_score ~ runtime + critics_score, data = movies_no_na)),
+BIC(lm(audience_score ~ runtime + imdb_rating, data = movies_no_na)))	4653.856 -> no removal
+
+Final params : runtime, critics_score, imdb_rating
+
+----------------------------------------------------------------------------------------------------
+
+Model Diagnostics : 
+1. Linearity and Constant Variance:
+mlm_movie_model <- lm(audience_score ~ runtime + imdb_rating + critics_score, data = movies_no_na)
+mlm_movie_model_aug <- augment(mlm_movie_model)
+ggplot(data = mlm_movie_model_aug, aes(x = .fitted, y = .resid)) +
+  geom_point(alpha = 0.6) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Fitted values", y = "Residuals")
+
+2. 
+ggplot(data = mlm_movie_model_aug, aes(x = .resid)) +
+  geom_histogram() +
+  xlab("Residuals")
+
+
+ggplot(mlm_movie_model_aug) +
+  geom_qq(aes(sample = .std.resid)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(x = "Theoretical quantiles", y = "Standardized residuals")
+
+3. Outliers
+outliers <- Bayes.outlier(mlm_movie_model, k = 3)
+outliers_df <- data.frame(probability = outliers$prob.outlier,
+                          case = 1:length(outliers$prob.outlier))
+ggplot(outliers_df, aes(ymax = probability, x = case)) +
+  geom_linerange(ymin = 0) +
+  labs(y = "Probability")
+
+--------
+Coeff
+
+bma_movie_model <- bas.lm(audience_score ~ runtime + imdb_rating + critics_score, data = movies_no_na,
+                   prior = "BIC", 
+                   modelprior = uniform())
+
+# Print out the marginal posterior inclusion probabilities for each variable                
+bma_movie_model
+
+coef_movie <- coefficients(bma_movie_model)
+coef_movie
+
+confint(coef_movie)
+plot(coef_movie, subset = c(1,2,3,4), ask = FALSE)
+
+
+Prediction
+movie_pred <- data.frame(runtime = c(128), imdb_rating=c(8.1), critics_score=c(91))
+
+bma_predict <- predict(bma_movie_model, newdata=movie_pred, se.fit = TRUE, estimator = "BMA")
+ci_bma_predict_movie <- confint(bma_predict, estimator = "BMA")
+
+movie_pred <- data.frame(runtime = c(122), imdb_rating=c(7.1), critics_score=c(85))
+bma_predict <- predict(bma_movie_model, newdata=movie_pred, se.fit = TRUE, estimator = "MPM")
+ci_bma_predict_movie <- confint(bma_predict, estimator = "MPM")
+ci_bma_predict_movie
+
+
+https://www.imdb.com/title/tt3748528/
+https://www.rottentomatoes.com/m/rogue_one_a_star_wars_story/
+predicted : 82.32956 original : 86
+movie_pred <- data.frame(runtime = c(133), imdb_rating=c(7.8), critics_score=c(84))
+bma_predict <- predict(bma_movie_model, newdata=movie_pred, se.fit = TRUE, estimator = "BMA")
+ci_bma_predict_movie <- confint(bma_predict, estimator = "BMA")
+ci_bma_predict_movie
+
+
+max_predict <- which.max(bma_predict$fit)
+
+//exp(ci_bma_predict_movie[max_predict, ])

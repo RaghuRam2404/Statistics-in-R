@@ -1,0 +1,260 @@
+---
+title: "Statistical inference with the GSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Table of Contents
+<ol>
+  <li><a href="#part-1-data">1. Data</a></li>
+  <li><a href="#part-2-research-question">2. Research Question</a></li>
+  <li><a href="#part-3-exploratory-data-analysis">3. EDA</a></li>
+  <li><a href="#part-4-inference">4. Inference</a></li>
+  <li><a href="#hypothesis">4.1 Hypothesis</a></li>
+  <li><a href="#conditions">4.2 Conditions</a></li>
+  <li><a href="#method-to-do-inference">4.3 Method to do inference</a></li>
+  <li><a href="#inference">4.4 Inference</a></li>
+  <li><a href="#confidence-interval">4.5 Confidence Interval</a></li>
+  <li><a href="#conclusion">4.6 Result/Conclusion</a></li>
+</ol>
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+Since 1972, the General Social Survey (GSS) has been monitoring societal change and studying the growing complexity of American society. The GSS aims to gather data on contemporary American society in order to monitor and explain trends and constants in attitudes, behaviors, and attributes; to examine the structure and functioning of society in general as well as the role played by relevant subgroups; to compare the United States to other societies in order to place American society in comparative perspective and develop cross-national models of human society; and to make high-quality data easily accessible to scholars, students, policy makers, and others, with minimal cost and waiting. 
+
+GSS questions include such items as national spending priorities, marijuana use, crime and punishment, race relations, quality of life, and confidence in institutions.
+
+Since this survey is done by random sampling and the results can be "**generalized**" but not "~~causality~~" due to no random assignment.
+
+* * *
+
+## Part 2: Research question
+As the survey concentrates in studying the complexity of American Society, we can aim to find out *if the people's confidence level in the society is based on their working status*. If so, then government can work strongly towards improving them. It could solve questions like if the house keeping people are losing their confidence in the society. 
+
+Variables used
+<ol>
+  <li>confed</li>
+  <li>conbus</li>
+  <li>coneduc</li>
+  <li>conpress</li>
+  <li>confinan</li>
+  <li>conmedic</li>
+  <li>conjudge</li>
+  <li>wrkstat</li>
+<ol>
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+For the confidence level, we will aggregate the 6 confidence variables  <font color="red">confed</font>, <font color="red">conbus</font>, <font color="red">conedu</font>, <font color="red">conpress</font>, <font color="red">confinan</font>, <font color="red">conmedic</font> and <font color="red">conjudge</font>.
+
+Since it has 3 categorical values, we'll assign a probability value as
+
+Category      | value
+------------- | -----
+A Great Deal  | 1
+Only Some     | 0.5
+Hardly Any    | 0
+
+
+We'll then create new columns <font color="green">confidence_fed</font>, <font color="green">confidence_bus</font>, <font color="green">confidence_educ</font>, <font color="green">confidence_press</font>, <font color="green">confidence_finan</font>, <font color="green">confidence_medic</font> and <font color="green">confidence_judge</font> by the below R code
+
+```{r}
+
+gss <- gss %>% mutate(confidence_fed = ifelse(confed == "A Great Deal", 1, 
+                                              ifelse(confed == "Only Some", 0.5, 0)));
+
+
+gss <- gss %>% mutate(confidence_bus = ifelse(conbus == "A Great Deal", 1, 
+                                              ifelse(conbus == "Only Some", 0.5, 0)));
+
+
+gss <- gss %>% mutate(confidence_educ = ifelse(coneduc == "A Great Deal", 1, 
+                                               ifelse(coneduc == "Only Some", 0.5, 0)));
+
+
+gss <- gss %>% mutate(confidence_press = ifelse(conpress == "A Great Deal", 1, 
+                                                ifelse(conpress == "Only Some", 0.5, 0)));
+
+
+gss <- gss %>% mutate(confidence_finan = ifelse(confinan == "A Great Deal", 1, 
+                                                ifelse(confinan == "Only Some", 0.5, 0)));
+
+
+gss <- gss %>% mutate(confidence_medic = ifelse(conmedic == "A Great Deal", 1, 
+                                                ifelse(conmedic == "Only Some", 0.5, 0)));
+
+
+gss <- gss %>% mutate(confidence_judge = ifelse(conjudge == "A Great Deal", 1, 
+                                                ifelse(conjudge == "Only Some", 0.5, 0)));
+```
+
+Now that we have numerical columns, we will create an aggregate column <font color="green">confidence</font> which adds up all the above new columns. So higher the value in <font color="green">confidence</font>, the more the confidence in the society.
+
+```{r}
+gss <- gss %>% mutate(confidence = confidence_fed+confidence_bus+confidence_educ+confidence_press+confidence_finan+confidence_medic+confidence_judge)
+```
+
+
+
+
+With all the required columns, let's compare the confidence in the box plot
+
+```{r}
+ggplot(data=gss, aes(x=factor(wrkstat), y=confidence)) + geom_boxplot()
+```
+
+```{r}
+gss %>% filter(!is.na(confidence)) %>% group_by(wrkstat) %>% summarise(iqr = IQR(confidence), mean=mean(confidence), sd=sd(confidence), count=n()) %>% arrange(desc(iqr))
+```
+
+From the graph and the summary value, we can infer that *all the working groups are nearly confidence as every one else with similar IQR and median*. But is it the case? Check out the below inference.
+
+
+* * *
+
+## Part 4: Inference
+
+With the mean/IQR values being some close to each other, let's do the analysis of the data by <font size="8" color="red">ANOVA</font> as we have the variable <font color="red">wrkstat</font> with 8 different values. 
+
+###4.1 Hypothesis : 
+
+Ho : nothing is going on. All the mean values are equal. So all working group people are in same confidence level
+
+Ha : Confidence level is affected by the working status
+
+###4.2 Conditions : <br/>
+####4.2.1 Independence : <br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.1 Since the survey is from random sampling, we can assume independence<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.2 And the sample must be n < 10% the population
+
+* * *
+####4.2.2 Approxiate Normality : <br />
+
+Check the distributions below
+
+```{r}
+ggplot(data=gss %>% filter(wrkstat=="Working Fulltime", !is.na(confidence)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Working Parttime", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Temp Not Working", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Unempl, Laid Off", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Retired", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="School", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Keeping House", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+```
+        
+**All the distributions are nearly normal within each group**
+
+* * *
+
+####4.2.3 Equal variance
+
+```{r}
+var((gss %>% filter(wrkstat == "Working Fulltime" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Working Parttime" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Temp Not Working" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Unempl, Laid Off" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Retired" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "School" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Keeping House" , !is.na(confidence)))$confidence)
+```
+
+All the values are very close to each other.
+
+####Hence all the conditions are satisfied
+
+* * *
+
+###4.3 Method to do inference
+
+```{r}
+gss %>% filter(!is.na(confidence)) %>% group_by(wrkstat) %>% summarise(mean=mean(confidence), count=n())
+```
+We will do the inference for Anova
+```{r}
+inference(y=confidence, x=wrkstat, data=gss %>% filter(!is.na(confidence)), type="ht", statistic = "mean", null=0, sig_level = 0.05, method="theoretical", alternative="greater")
+```
+
+####4.4 Inference
+
+With this higher F value, p-value is
+```{r}
+pf(13.3153, 7, 32263, lower.tail = FALSE);
+```
+
+So reject the null hypothesis and conclude that *confidence level in society is affected by the work status*
+
+* * *
+
+###4.5 Confidence Interval
+
+As there is a relation between work status and confidence level, <b>let's check the Confidence Interval of each work status as it could be helpful in exactly understanding the mindset of the work group</b>.
+
+Let's create some new data which will contain only the data of each work status category as below
+
+```{r}
+
+work_full_data <- gss %>% filter(!is.na(confidence), wrkstat == "Working Fulltime") %>% select(confidence)
+work_full_result <- inference(y=confidence, data=work_full_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+
+work_part_data <- gss %>% filter(!is.na(confidence), wrkstat == "Working Parttime") %>% select(confidence)
+work_part_data_result <- inference(y=confidence, data=work_part_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+
+temp_not_working_data <- gss %>% filter(!is.na(confidence), wrkstat == "Temp Not Working") %>% select(confidence)
+temp_not_working_result <- inference(y=confidence, data=temp_not_working_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+
+unemp_data <- gss %>% filter(!is.na(confidence), wrkstat == "Unempl, Laid Off") %>% select(confidence)
+unemp_result <- inference(y=confidence, data=unemp_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+
+retired_data <- gss %>% filter(!is.na(confidence), wrkstat == "Retired") %>% select(confidence)
+retired_result <- inference(y=confidence, data=retired_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+
+school_data <- gss %>% filter(!is.na(confidence), wrkstat == "School") %>% select(confidence)
+school_result <- inference(y=confidence, data=school_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+
+keeping_house_data <- gss %>% filter(!is.na(confidence), wrkstat == "Keeping House") %>% select(confidence)
+keeping_house_result <- inference(y=confidence, data=keeping_house_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+```
+
+And now we compare on where each work status category stand
+
+```{r}
+ci_id <- c("Working Fulltime","Working Parttime", "Temp Not Working","Unempl, Laid Off", "Retired", "School", "Keeping House")
+
+ci_bounds <- c(work_full_result$CI, work_part_data_result$CI, temp_not_working_result$CI, unemp_result$CI, retired_result$CI, school_result$CI, keeping_house_result$CI)
+
+ci_data <- data.frame(ci_id,ci_bounds)
+
+ggplot(data = ci_data, aes(x = ci_bounds, y = ci_id, group = ci_id)) + geom_point(size = 2) +  geom_line() + geom_vline(xintercept = (gss %>% filter(!is.na(confidence)) %>% summarise(mean=mean(confidence)))$mean, color = "darkgray")
+```
+
+
+###4.6 Conclusion : 
+Apart from the obvious conclusion that <b>work status and confidence level in society are related</b>. <br />
+We can see some surprise observations
+<ol>
+  <li>People working full time has less confidence in society than unemployed people</li>
+  <li>Retired people has much variability in the confidence level in society</li>
+</ol>

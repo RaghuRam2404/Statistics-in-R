@@ -1,0 +1,308 @@
+---
+title: "Modeling and prediction for movies"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+###Table of Contents
+
+* [Part 1: Data](#part-1-data)
+* [Part 2: Research question](#part-2-research-question)
+* [Part 3: Exploratory data analysis](#part-3-exploratory-data-analysis)
+* [Part 4: Modeling](#part-4-modeling)
+    + [Part 4.1 : Variables considered for the modeling](#part-4.1-variables-considered-for-the-modeling)
+    + [Part 4.2 : Reason for excluding certain variables](#part-4.2-reason-for-excluding-certain-variables)
+    + [Part 4.3 : Method Selection](#part-4.3-method-selection)
+    + [Part 4.4 : Linear Modeling](#part-4.4-linear-modeling)
+    + [Part 4.5 : Model Diagnostics](#part-4.5-model-diagnostics)
+    + [Part 4.6 : Interpretation of model coefficients](#part-4.6-interpretation-of-model-coefficients)
+* [Part 5: Prediction](#part-5-prediction)
+    + [Part 5.1 :Prediction](#part-5.1-prediction)
+    + [Part 5.2 :Prediction Interval](#part-5.2-prediction-interval)
+    + [Part 5.3 :Uncertainity around this prediction interval](#part-5.3-uncertainity-around-this-prediction-interval)
+    + [Part 5.4 :References](#part-5.4-references)
+* [Part 6: Conclusion](#part-6-conclusion)
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+Let's put the gas in the tank
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+As it was mentioned first that the data set is comprised of 651 *randomly sampled* movies produced and released before 2016, we can conclude that the conclusion derived are generalizable and can be applied to the population.
+
+It is *not causal* as there is no random assignment. So we can't find reason on why people like a movie or not.
+
+* * *
+
+## Part 2: Research question
+
+From the data model of the movies, we can aim to find what makes the good quality movie. Is good quality movie the one with most people's liking or critics' liking? For our research question, we'll consider that a good quality movie is the one with ```a good critics score```.
+
+So what is the relation between people's opinion, genre, awards are related to a critics' score?
+
+It is true that if people likes a movie the most, then it is watchable. But is it a good quality movie?
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+Let's dwell into this.
+
+We'll take the <font color="red">critics_score</font> as the *response variable* and the below as the *explanatory variables*
+
+<ol>
+  <li><font color="red">audience_score</font></li>
+  <li><font color="red">best_pic_win</font></li>
+  <li><font color="red">genre</font></li>
+  <li><font color="red">best_pic_nom</font></li>
+  <li><font color="red">runtime</font></li>
+  <li><font color="red">imdb_rating</font></li>
+</ol>
+
+
+```{r}
+ggplot(data=movies, aes(x=imdb_rating, y=critics_score)) + geom_point()
+```
+```{r}
+ggplot(data=movies, aes(x=audience_score, y=critics_score)) + geom_point()
+```
+
+So <font color="red">critics_score</font> are direclty associated to <font color="red">audience_score</font> and <font color="red">imdb_rating</font>. Let's check the same with <font color="red">runtime</font>
+
+
+```{r}
+ggplot(data=movies, aes(x=runtime, y=critics_score)) + geom_point()
+```
+
+We know that <font color="red">runtime</font> should not be a part of the <font color="red">critics_score</font>. Let's see if the modeling section ([part 4](#part-4-modeling)) can find out that.
+
+
+```{r}
+movies %>% group_by(genre) %>% summarize(mean=mean(critics_score), iqr=IQR(critics_score), count=n()) %>% arrange(desc(iqr))
+```
+Critics are leaned more towards *Documentary* in terms of the mean statistics, but towards '*Art House and International*' interms of the IQR statistic. Let's see how it's been influenced with the combination of the other explanatory variables in the below sections.
+
+
+* * *
+
+## Part 4: Modeling
+
+###Part 4.1 : Variables considered for the modeling
+
+response variable | explanatory variables
+------------------|----------------------
+critics_score     | audience_score
+     &nbsp;       | best_pic_win
+     &nbsp;       | genre
+     &nbsp;       | best_pic_nom
+     &nbsp;       | runtime
+     &nbsp;       | imdb_rating
+
+###Part 4.2 : Reason for excluding certain variables
+<font color="red">critics_rating</font> and <font color="red">audience_rating</font> as they are less informative and categorical. And other variables for similar reasons.
+
+```{r}
+movies %>% group_by(critics_rating) %>% summarize(count=n())
+```
+
+```{r}
+movies %>% group_by(audience_rating) %>% summarize(count=n())
+```
+
+These values are not useful for the critics' score
+
+###Part 4.3 : Method Selection
+
+We'll use the <font color="green">Backward selection with the adjusted-r-squared</font>. 
+
+The reason for choosing <font color="green">adjusted-r-squared</font> is because that we need more reliable predictions on the critical score. We don't need to find the significant predictors using <font color="red">p-value</font>. And we can eliminate the unwanted variables in each step.
+
+###Part 4.4 : Linear Modeling
+
+```{r}
+movies_lm <- lm(critics_score ~ audience_score + best_pic_win + genre + best_pic_nom + runtime + imdb_rating, data=movies)
+summary(movies_lm)$adj.r.squared
+```
+
+With the above value, let's go to step 1 of removing each variable
+
+####Step 1
+```{r}
+summary(lm(critics_score ~ audience_score + best_pic_win + genre + best_pic_nom + runtime, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ audience_score + best_pic_win + genre + best_pic_nom + imdb_rating, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ audience_score + best_pic_win + genre + runtime + imdb_rating, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ audience_score + best_pic_win + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ best_pic_win + genre + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared
+```
+
+We'll remove the <font color="red">best_pic_win</font> and we have updated adj-r-squared value as ```0.5979892``` .
+
+####Step 2
+
+```{r}
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom + runtime, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom + imdb_rating, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ audience_score + genre + runtime + imdb_rating, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ audience_score + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ genre + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared
+```
+
+We'll remove the <font color="red">runtime</font> and we have updated adj-r-squared value as ```0.5982763``` . 
+
+*Check that unwanted variable has been removed automatically, even though we added in knowingly*
+
+####Step 3
+
+```{r}
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ audience_score + genre + imdb_rating, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ audience_score + best_pic_nom + imdb_rating, data=movies))$adj.r.squared
+```
+```{r}
+summary(lm(critics_score ~ genre + best_pic_nom + imdb_rating, data=movies))$adj.r.squared
+```
+
+Since there is no improvement in the adj-r-squared value. We'll stop it over here. The final predictors are ```audience_score + genre + best_pic_nom + imdb_rating```
+
+```{r}
+final_model <- lm(critics_score ~ audience_score + genre + best_pic_nom + imdb_rating, data=movies)
+final_model
+```
+
+###Part 4.5 : Model Diagnostics
+
+####Part 4.5.1 : Linear Relationships
+Linear relationships : between critics_score & audience_score, critics_score & imdb_rating
+```{r}
+ggplot(data = lm(critics_score ~ imdb_rating, data = movies), aes(x = .fitted, y = .resid)) + geom_point() + geom_hline(yintercept = 0, linetype = "dashed") + xlab("Fitted values") + ylab("Residuals")
+ggplot(data = lm(critics_score ~ audience_score, data = movies), aes(x = .fitted, y = .resid)) + geom_point() + geom_hline(yintercept = 0, linetype = "dashed") + xlab("Fitted values") + ylab("Residuals")
+```
+
+It is satisfied as there is a random scatter around 0.
+
+####Part 4.5.2 : Residual Distributions
+
+```{r}
+ggplot(data = final_model, aes(x = .resid)) + geom_histogram() + xlab("Residuals")
+```
+
+The distribution is nearly normal and it is concentrated around 0.
+
+####Part 4.5.3 : Constant variability of the residuals
+
+```{r}
+plot(final_model$residuals ~ final_model$fitted)
+```
+
+It is satisfied as there is a random scatter around 0.
+
+####Part 4.5.4 : Independent residuals
+
+As the data is randomly sampled and each movie is independent of each other, we can safely assume that the residuals are also independent observations.
+
+
+###Part 4.6 : Interpretation of model coefficients
+```{r}
+summary(final_model)
+```
+
+Some observations are
+<ol>
+  <li>Proportion of variability in ```critic_score``` :  ```0.6063``` (60.63%).</li>
+  <li>With null hypothesis as all indicators are equals and p-value as very low. We can reject the null hypothesis and conclude that some indicators are not equal</li>
+  <li>If a movie is documentary, then the average critic rating will increase by ```13```</li>
+</ol>
+
+* * *
+
+##Part 5: Prediction
+
+Let's try to predict the movie 'La La Land' from our model. First check if the movie is already present in the model.
+```{r}
+movies %>% filter(grepl("land", title) | grepl("la la", title)) %>% select(title)
+```
+
+It is not.
+
+###Part 5.1 :Prediction
+Then, create the movie data and predict it
+```{r}
+movie_predict_data <- data.frame(audience_score=81, genre = "Drama", best_pic_nom = "yes", imdb_rating=8.1)
+predict(final_model, movie_predict_data)
+```
+
+With our prediction of ```91.97652 %``` matches with the one in Rotten tomatoes' ```91 %```
+
+
+###Part 5.2 :Prediction Interval
+```{r}
+movie_predict_data <- data.frame(audience_score=81, genre = "Drama", best_pic_nom = "yes", imdb_rating=8.1)
+predict(final_model, movie_predict_data, interval = "prediction", level = 0.95)
+```
+
+The 95% prediction interval of the critics' score for any movie with ```audience_score=81, genre = "Drama", best_pic_nom = "yes", imdb_rating=8.1``` is ```between 55.78501% and 128.168%```.
+
+###Part 5.3 :Uncertainity around this prediction interval
+
+As the critics' score is percentage, it can't exceed 100%. But the prediction interval has the upper limit as ```128.168%```
+
+###Part 5.4 :References
+
+[IMDB Link](https://www.imdb.com/title/tt3783958/) and [Rotten Tomatoes Link](https://www.rottentomatoes.com/m/la_la_land/)
+![Rotten Tomatoes](https://i.imgur.com/YbAYBYn.jpg)
+![IMDB](https://i.imgur.com/KrYm2f7.jpg)
+
+* * *
+
+## Part 6: Conclusion
+
+1. All else hold constant, Genres like 'Science Fiction & Fantasy' increases critics score by hefty ```12.48306``` compared to ```-1.83``` of 'Art House & International'
+
+2. Awards, Rating don't affect critic score
+
+So to conclude, critic's score even though it is directly related to people's opinion as ```audience_score/imdb_rating```, but factors like ```genre/best_pic_nom``` plays a major role but not ```best_pic_win```. 
+
+
+But there are cases where the model fails if the people like the movie too much and genre is 'Science Fiction & Fantasy', the critic's score could be low due to other factors like ```bad movie plot```. As adj-r-squared value is ```59.83%```, there are still hefty of chances where the prediction will still go wrong.

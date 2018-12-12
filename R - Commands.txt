@@ -1,0 +1,316 @@
+R - Commands
+
+install.packages("devtools")
+install.packages("dplyr")
+install_github("StatsWithR/statsr")
+
+library(statsr)
+library(PairedData)
+library(dplyr)
+library(ggplot2)
+library(devtools)
+library(MASS)
+library(BAS)
+
+
+arbuthnot[girls]
+
+GGPLOT : ggplot(data = arbuthnot, aes(x = year, y = girls)) +   geom_point()
+MUTATE : arbuthnot <- arbuthnot %>%  mutate(total = boys + girls)
+
+--------------------------------------------------------------------------------
+
+COUNT NO OF VARIABLES OF EACH DATATYPE : 
+data_types <- function(frame) {
+  res <- lapply(frame, class)
+  res_frame <- data.frame(unlist(res))
+  barplot(table(res_frame), main="Data Types", col="steelblue", ylab="Number of Features")
+}
+data_types(ames_train)
+
+or
+
+data.frame(unlist(lapply(ames_train, class))) %>% group_by(unlist.lapply.ames_train..class..) %>% summarise(count = n())
+
+--------------------------------------------------------------------------------
+
+FILTER : rdu_flights <- nycflights %>% filter(dest=='RDU')
+	test <- nycflights %>% filter (arr_time > 1216,(arr_delay < 0 | day == 30))
+	!is.na(X_singlefav) // is not null
+	filter(jnzflike %in% c("0","10"))	// in comparator
+
+SLICE : brfss2013 %>% filter(!is.na(income2), !is.na(menthlth)) %>% group_by(X_state) %>% summarize(mean = IQR(menthlth)) %>% arrange(desc(mean)) %>% slice(1:5)
+
+TYPE CONVERSION : selected_nzes2011 <- selected_nzes2011 %>% 
+  mutate(numlikenzf = as.numeric(as.character(jnzflike)))	//as.character needed for 'factor' type variables
+
+
+IFELSE : nycflights <- nycflights %>% mutate(dep_type = ifelse(dep_delay < 5, "on time", "delayed"))
+
+SUMMARIZE, MEAN, SD, N : rdu_flights %>% summarise(mean_dd = mean(dep_delay), sd_dd = sd(dep_delay), n = n())
+	mean
+	median
+	sd
+	var
+	IQR
+	range
+	min
+	max
+	cor(runs, at_bats) -> correlation co-eff for 2 numerical variables
+
+SUM : sum(is.na(df$col))	-> count the number of na rows in that col.
+
+LOG/EXP : log(2) exp(logval)
+
+SUMMARY : summary(column) returns min, max, 1st qu, 3rd qu, median, mean, NA's
+
+GROUP BY : rdu_flights %>% group_by(origin) %>% summarise(mean_dd = mean(dep_delay), sd_dd = sd(dep_delay), n = n())
+
+ARRANGE : nycflights %>% group_by(month) %>% summarise(mean_dd = mean(dep_delay)) %>% arrange(desc(mean_dd))
+
+FACTOR : Treating numberical value as categorical : 
+ggplot(nycflights, aes(x = factor(month), y = dep_delay)) + geom_boxplot() // factor tells R to treat month as categorical
+
+
+
+GEOMETRIC : 
+GEOM_POINT : ggplot(data = arbuthnot, aes(x = year, y = girls)) +   geom_point()
+				geom_point(alpha = 0.6) --> transparency
+GEOM_LINE : ggplot(data = arbuthnot, aes(x = year, y = total)) + geom_line()
+GEOM_HISTOGRAM : ggplot(data = nycflights, aes(x = dep_delay)) + geom_histogram(binwidth=1)
+GEOM_BAR : ggplot(data = nycflights, aes(x = origin, fill = dep_type)) + geom_bar() (or) ggplot(data=mental_health_data, aes(x=income2, y=mean)) + geom_bar(stat="identity")
+GEOM_VLINE : geom_vline(xintercept = params$mu, color = "darkgray")
+GEOM_HLINE : geom_hline(yintercept = 0, linetype = "dashed") 
+GEOM_JITTER : geom_jitter
+
+ggplot(data = ci_data, aes(x = ci_bounds, y = ci_id, 
+                           group = ci_id, color = capture_mu)) +
+  geom_point(size = 2) +  # add points at the ends, size = 2
+  geom_line() +           # connect with lines
+  geom_vline(xintercept = params$mu, color = "darkgray") # draw vertical line
+
+mosaic_table = table(brfss2013$income2, brfss2013$medcost)
+mosaicplot(mosaic_table, "Income vs Seeing Doctor", xlab="Income", ylab="Seeing Doctor")
+
+mosaic_table = table(brfss2013$income2, brfss2013$persdoc2, brfss2013$medcost)
+mosaicplot(mosaic_table, "Income Category vs (persdoc2 vs medcost) ", xlab="Income category", ylab="persdoc2")
+
+-----------------------------------------------
+
+SAMPLING : 
+coin_outcomes <- c("heads", "tails")
+
+sim_fair_coin <- sample(coin_outcomes, size = 100, replace = TRUE)
+sim_unfair_coin <- sample(coin_outcomes, size = 100, replace = TRUE, prob = c(0.2, 0.8))
+
+table(sim_fair_coin)	//show the table of each outcome
+
+CALC_STREAK : kobe_streak <- calc_streak(kobe_basket$shot)
+
+Finding a column using GREP : grep("singlefav", names(selected_nzes2011), value = TRUE) // value == FALSE for index value
+
+
+
+ITERATION : 
+for(i in 1:dim(health_income_persdoc2_medcost)[1]){
+	inc <- data.frame(lapply(health_income_persdoc2_medcost[i,1], as.character), stringsAsFactors=FALSE)
+	persdoc <- data.frame(lapply(health_income_persdoc2_medcost[i,2], as.character), stringsAsFactors=FALSE)
+	print((health_income %>% filter(income2 %in% inc, medcost %in% medc))$n)
+	health_income_persdoc2_medcost <- health_income_persdoc2_medcost %>% mutate(probability = ifelse((income2 %in% inc & persdoc2 %in% persdoc), n/(health_income_persdoc2 %>% filter(income2 %in% inc, persdoc2 %in% persdoc))$n,probability))
+}
+
+SAMPLE_N : ames %>% sample_n(size = 50) %>% summarise(x_bar = mean(area))
+
+REP_SAMPLE_N : sample_means50 <- ames %>% rep_sample_n(size = 50, reps = 15000, replace = TRUE) %>% summarise(x_bar = mean(area)) 
+	repeat and save the data in sample_means50
+
+
+SEEDING : set.seed(9102015) : Setting a seed will cause R to sample the same sample each time you knit your document. This will make sure your results don’t change each time you knit, and it will also ensure reproducibility of your work (by setting the same seed it will be possible to reproduce your results)
+
+
+pnorm(2, sd=, mean=, lower.tail=FALSE/TRUE) or pnorm(2)
+qnorm(.08)
+pt(2, df=, lower.tail=FALSE/TRUE)
+pchisq(val, df, lower.tail=FALSE)
+
+-----------------------------------------------
+
+INFERENCE : 
+for hypothesis test
+inference(y = weight, x = habit, data = nc, statistic = "mean", type = "ht", null = 0, 
+          alternative = "twosided", method = "theoretical")
+
+          y - response variable
+          x - explanatory variable
+          data - input
+          statistic - mean/median/proportion
+          type - ht (hypothesis test) or ci (confidence internal)
+          null - null value must be given for hypothesis test
+          alternative - less/greater/two sided
+          method - theoretical/simulation
+
+for CI
+inference(y = weight, x = habit, data = nc, statistic = "mean", type = "ci", method = "theoretical", conf_level = .99)
+inference(y = weight, x = habit, data = nc, statistic = "mean", type = "ci", method = "theoretical", order = c("smoker","nonsmoker")) change the order using 'order'
+
+source("https://bit.ly/dasi_inference")
+inference(paul, est="proportion", type="ht", method="simulation", null=0.5, success="yes", alternative="greater", nsim=1000)
+
+inference(y = response, data = us12, statistic = "proportion", type = "ci", method = "theoretical", success = "atheist")
+inference(y=response, x=year, data=athiest_sp, statistic="proportion", type="ht", method="theoretical", success="atheist", alternative = "twosided")
+
+Inference techniques
+One numerical and one categorical variable (with only 2 levels): hypothesis test + confidence interval parameter of interest = difference between two means (theoretical or simulation)parameter of interest = difference between two medians (simulation only)
+One numerical and one categorical variable (with more than 2 levels): hypothesis test only compare means across several groups no defined parameter of interest, ANOVA and pairwise tests (theoretical only)
+Two categorical variables (each with only 2 levels): hypothesis test + confidence interval parameter of interest = difference between two proportions (theoretical if success-failure condition met, simulation if not)
+Two categorical variables (either one or both with more than 2 levels): hypothesis test only compare proportions across several groups no defined parameter of interest, Chi-square test only (theoretical if expected sample size condition met, simulation if not)
+
+-----------------------------------------------
+
+Linear modeling
+plot_ss(x = at_bats, y = runs, data = mlb11, showSquares = TRUE) -> Sum square for 2 variable linear relationship
+m1 <- lm(response var ~ explanatory var, data = mlb11) -> build the linear model
+confint(m1, level=)
+tidy(m1)
+augment(m1) -- The augment function in the broom package is going to come in handy here as it takes in a model object (the output of an lm) and returns a data frame with columns correspinding to variables in the model as well as predicted values (.fitted), residuals (.resid), and standardized residuals (.std.resid), along with a few others.
+
+summary(m1)$adj.r.squared
+
+To check linear relationship : 
+ggplot(data = m1, aes(x = .fitted, y = .resid)) + geom_point() + geom_hline(yintercept = 0, linetype = "dashed") + xlab("Fitted values") + ylab("Residuals") -> residual plot
+
+To check the residual dist
+ggplot(data = m1, aes(x = .resid)) + geom_histogram(binwidth = 25) + xlab("Residuals")	-> histogram for the distribution of the residuals to check normal dist
+ggplot(data = m1, aes(sample = .resid)) + stat_qq()
+qqnorm(m1$residuals)
+qqline(m1$residuals)
+
+To check constant variability
+plot(m1$residuals ~ m1$fitted)
+plot(abs(m1$residuals) ~ m1$fitted)	-> shape similar to the folded half of above
+
+ggplot(data = mlb11, aes(x = at_bats, y = runs)) + geom_point() + stat_smooth(method = "lm", se = FALSE) -> scattered plot + linear modelling
+
+PREDICTION : 
+newprof <- data.frame(gender = "male", bty_avg = 3)
+predict(m_bty_gen, newprof) // pass the data as input to the linear model
+predict(m_bty_gen, newprof, interval = "prediction", level = 0.95) // same with 95% confidence on prediction interval
+
+-----------------------------------------------
+
+OUTLIERS : 
+outliers <- Bayes.outlier(m_lwage_iq, k = 3)
+outliers_df <- data.frame(probability = outliers$prob.outlier,
+                          case = 1:length(outliers$prob.outlier))
+ggplot(outliers_df, aes(ymax = probability, x = case)) +
+  geom_linerange(ymin = 0) +
+  labs(y = "Probability")
+outliers_df %>% filter(probability > 0.50)
+
+(prob_outlier <- pnorm(-3) + pnorm(3, lower.tail = FALSE))	// prob of a case being an outlier:   being below or above 3 standard deviations from 0
+(prob_not_outlier <- 1 - prob_outlier) 	//probability of a signle case not being an outler is therefore the complement 
+n <- nrow(wage)
+(prob_no_outliers <- prob_not_outlier^n)	//probability of no outliers in the sample of n assuming errors are independent a priori
+1 - prob_no_outliers	//probability of at least one outlier in the sample is the complement of the probability of no outliers in the sample of n
+
+
+
+-----------------------------------------------
+
+Bayesian statistics
+p <- seq(from=0.1, to=0.9, by=0.1)
+prior <- c(rep(.06,4), .52, rep(.06,4))
+likelihood <- dbinom(4, size = 20, prob = p)
+likelihood
+numerator <- prior * likelihood
+denominator <- sum(numerator)
+posterior <- numerator/denominator
+sum(posterior)
+
+
+Gamma credible interval
+qgamma(c(0.025, 0.975), shape = 10, rate = 5)
+qbeta(c(0.05, 0.95), shape1 = 2, shape2 = 5)
+
+
+bayes_inference(y = weight, data = nc_fullterm, 
+                statistic = "mean", type = "ci",  
+                prior_family = "JZS", mu_0 = 7.7, rscale = 1,
+                method = "simulation",
+                cred_level = 0.95)
+
+The argument prior indicates which prior distribution for any unknown parameters we will use for inference or testing, with options 
+	JZS (the Jeffreys-Zellner-Siow 				prior which is the Jeffreys prior for the unknown variance 	and a Cauchy prior for the mean), 
+	JUI (the Jeffreys-Unit Information 			prior which is the Jeffreys prior for the variance 			and the Unit Information Gaussian prior for the mean), 
+	NG (the conjugate Normal-Gamma 				prior for the mean 											and inverse of the variance) or 
+	ref (the independent Jeffreys reference 	prior for the variance 										and the uniform prior for the mean).
+For all of the prior_family options, we need to specify prior hyperparameters
+	For JZS, the prior on standardized effect μ/σ is a Cauchy centered at mu_0 and with a scale of rscale
+
+bayes_inference(y = weight, data = nc_fullterm, 
+                statistic = "mean", type = "ht",  
+                prior_family = "JZS", mu_0 = 7.7, rscale = 1,
+                method = "theoretical", alternative = "twosided", show_plot=FALSE)
+
+comparing 2 independent means
+bayes_inference(y = weight, x = habit, data = nc_fullterm, 
+                statistic = "mean", 
+                type = "ht", alternative = "twosided", null = 0, 
+                prior = "JZS", rscale = 1, 
+                method = "theoretical", show_plot = FALSE)
+add the argument 'hypothesis_prior=c(a, b)' with different prior probabilities
+
+bayes_inference(y = weight, x = habit, data = nc_fullterm, 
+                statistic = "mean", 
+                type = "ci", cred_level = .95, mu_0 = 0,
+                prior = "JZS", rscale = 1, 
+                method = "theoretical", show_plot = FALSE)
+
+-----------------------------------------------
+
+Bayesian model averaging (BMA)
+
+bma_lwage <- bas.lm(lwage ~ . -wage, data = wage_no_na,
+                   prior = "BIC", 
+                   modelprior = uniform())
+
+summary(bma_lwage)	//Top 5 most probably models
+
+coef_lwage <- coefficients(bma_lwage)	//Obtain the coefficients from the model `bma_lwage`
+
+plot(coef_lwage, subset = c(3,13), ask = FALSE)	//`iq` is the 3rd variable, while `sibs` is the 13th variable in the data set
+
+confint(coef_lwage)
+
+Prediction : 
+BPM_pred_lwage <- predict(bma_lwage, estimator = "BPM", se.fit = TRUE)
+variable.names(BPM_pred_lwage)
+HPM_pred_lwage <- predict(bma_lwage, estimator = "HPM")
+variable.names(HPM_pred_lwage)
+MPM_pred_lwage <- predict(bma_lwage, estimator = "MPM")
+variable.names(MPM_pred_lwage)
+
+# Find the index of observation with the largest fitted value
+opt <- which.max(BPM_pred_lwage$fit)
+
+# Extract the row with this observation and glimpse at the row
+wage_no_na %>% 
+  slice(opt) %>%
+  glimpse()
+
+ci_lwage <- confint(BPM_pred_lwage, parm = "pred")
+ci_lwage[opt,]
+
+BMA_pred_lwage <- predict(bma_lwage, estimator = "BMA", se.fit = TRUE)
+ci_bma_lwage <- confint(BMA_pred_lwage, estimator = "BMA")
+opt_bma <- which.max(BMA_pred_lwage$fit)
+exp(ci_bma_lwage[opt_bma, ]) 	//exponentiating the log values	
+
+--------------
+Out of sample - coverage
+k.BIC = log(nrow(ames_train))
+model.BIC = stepAIC(model.full, k = k.BIC)
+
+predict.BIC <- exp(predict(model.BIC, ames_test, interval = "prediction"))
+coverage.prob.BIC <- mean(ames_test$price > predict.BIC[,"lwr"] & ames_test$price < predict.BIC[,"upr"])
+coverage.prob.BIC

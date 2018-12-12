@@ -1,0 +1,53 @@
+
+variables_chosen <- c()
+var_count = 0
+variables1 <- names(ames_train)
+variables2 <- names(ames_train)
+
+latest_AIC = 1/0
+
+for(vartest in variables1){
+	include_var = ""
+	found = FALSE
+	for(var in variables2){
+		if(var == "price" || var %in% variables_chosen){
+			next
+		}
+		if(var == "area"){
+			var = "log(area)"
+		}
+		temp_variables_chosen <- variables_chosen
+		temp_variables_chosen[[length(temp_variables_chosen)+1]] = var
+		tempAIC = AIC(lm(as.formula(paste("log(price) ~ ", paste(c(temp_variables_chosen), collapse="+"))), data=ames_train ))
+		if(tempAIC < latest_AIC){
+			latest_AIC = tempAIC
+			include_var = var;
+			found = TRUE
+		}
+	}
+	if(found){
+		var_count = var_count + 1
+		variables_chosen[[var_count]] = include_var
+	}
+}
+print(variables_chosen)
+print(latest_AIC)
+
+
+> print(variables_chosen)
+ [1] "Overall.Qual"   "log(area)"      "Neighborhood"   "BsmtFin.SF.1"   "Overall.Cond"   "age"            "Bldg.Type"      "Total.Bsmt.SF" 
+ [9] "Sale.Condition" "Condition.2"    "Exter.Cond"     "Bsmt.Exposure"  "MS.Zoning"      "Garage.Cars"    "Exterior.1st"   "Exter.Qual"    
+[17] "Condition.1"    "Bsmt.Full.Bath" "Central.Air"    "Lot.Shape"      "Garage.Cond"    "Bsmt.Qual"      "Garage.Qual"    "Kitchen.Qual"  
+[25] "Garage.Yr.Blt"  "Fireplaces"     "Lot.Config"     "Heating"        "Heating.QC"     "Sale.Type"      "Kitchen.AbvGr"  "Functional"    
+[33] "Year.Remod.Add" "Screen.Porch"   "Wood.Deck.SF"   "Foundation"     "X3Ssn.Porch"    "Bsmt.Cond"      "Bedroom.AbvGr"  "Paved.Drive"   
+[41] "Open.Porch.SF" 
+> print(latest_AIC)
+[1] -1485.826
+
+aic_final_model <- stepAIC(lm(formula = log(price) ~ Overall.Qual + log(area) + Neighborhood + BsmtFin.SF.1 + Overall.Cond + age + Bldg.Type + Total.Bsmt.SF + Sale.Condition + Condition.2 + Exter.Cond + Bsmt.Exposure + MS.Zoning + Garage.Cars + Exterior.1st + Exter.Qual + Condition.1 + Bsmt.Full.Bath + Central.Air + Lot.Shape + Garage.Cond + Bsmt.Qual + Garage.Qual + Kitchen.Qual + Garage.Yr.Blt + Fireplaces + Lot.Config + Heating + Heating.QC + Sale.Type + Kitchen.AbvGr + Functional + Year.Remod.Add + Screen.Porch + Wood.Deck.SF + Foundation + X3Ssn.Porch + Bsmt.Cond + Bedroom.AbvGr + Paved.Drive + Open.Porch.SF + X1st.Flr.SF, data = na.omit(ames_train)), direction = "backward", k=2, trace = 0, steps = 1000)
+summary(aic_final_model)
+
+combn(variables_chosen[1:41], 16)
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

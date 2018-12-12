@@ -1,0 +1,87 @@
+critics_score
+	- audience_score
+	- best_pic_win
+	- genre
+	- best_pic_nom
+	- runtime
+	- imdb_rating
+
+Research question : 
+How does people's opinion and awards has an effect on critics score?
+
+
+<font color="red"></font>
+<font color="green"></font>
+
+1. Normal comparison
+
+imdb vs critics
+ggplot(data=movies, aes(x=imdb_rating, y=critics_score)) + geom_point()
+ggplot(data=movies, aes(x=imdb_rating, y=audience_score)) + geom_point()
+
+movies %>% group_by(genre) %>% summarize(mean=mean(critics_score), iqr=IQR(critics_score), count=n()) %>% arrange(desc(iqr))
+
+2. Modeling
+
+2.1 Excluding critics_rating and audience_rating as they are less informative and categorical
+
+2.2. Model : backward elimination - adj R2 due to the quality of the data rather than finding the significant predictors
+
+2.3. Model
+movies_lm <- lm(critics_score ~ audience_score + best_pic_win + genre + best_pic_nom + runtime + imdb_rating, data=movies)
+summary(movies_lm)
+adj R2 : 0.5976
+summary(movies_lm)$adj.r.squared
+
+summary(lm(critics_score ~ audience_score + best_pic_win + genre + best_pic_nom + runtime, data=movies))$adj.r.squared			0.5212694
+summary(lm(critics_score ~ audience_score + best_pic_win + genre + best_pic_nom + imdb_rating, data=movies))$adj.r.squared		0.5978208
+summary(lm(critics_score ~ audience_score + best_pic_win + genre + runtime + imdb_rating, data=movies))$adj.r.squared			0.5976335
+summary(lm(critics_score ~ audience_score + best_pic_win + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared	0.5908536
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared			0.5979892	--> remove best_pic_win
+summary(lm(critics_score ~ best_pic_win + genre + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared				0.5927875
+
+
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared	0.5979892	
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom + runtime, data=movies))$adj.r.squared					0.5213979
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom + imdb_rating, data=movies))$adj.r.squared				0.5982763	--> remove runtime
+summary(lm(critics_score ~ audience_score + genre + runtime + imdb_rating, data=movies))$adj.r.squared					0.5974015
+summary(lm(critics_score ~ audience_score + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared			0.5913518
+summary(lm(critics_score ~ genre + best_pic_nom + runtime + imdb_rating, data=movies))$adj.r.squared					0.5932242
+
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom + imdb_rating, data=movies))$adj.r.squared				0.5982763
+summary(lm(critics_score ~ audience_score + genre + best_pic_nom, data=movies))$adj.r.squared							0.5218319
+summary(lm(critics_score ~ audience_score + genre + imdb_rating, data=movies))$adj.r.squared							0.5980058
+summary(lm(critics_score ~ audience_score + best_pic_nom + imdb_rating, data=movies))$adj.r.squared						0.5913148
+summary(lm(critics_score ~ genre + best_pic_nom + imdb_rating, data=movies))$adj.r.squared								0.5930642
+
+No removal, the predictors are audience_score + genre + best_pic_nom + imdb_rating
+
+final_model <- lm(critics_score ~ audience_score + genre + best_pic_nom + imdb_rating, data=movies)
+
+2.4 Diagnostics
+2.4.1 Linear relationships : between critics_score & audience_score, critics_score & imdb_rating
+
+ggplot(data = lm(critics_score ~ imdb_rating, data = movies), aes(x = .fitted, y = .resid)) + geom_point() + geom_hline(yintercept = 0, linetype = "dashed") + xlab("Fitted values") + ylab("Residuals")
+ggplot(data = lm(critics_score ~ audience_score, data = movies), aes(x = .fitted, y = .resid)) + geom_point() + geom_hline(yintercept = 0, linetype = "dashed") + xlab("Fitted values") + ylab("Residuals")
+
+2.4.2 Residual dist : ggplot(data = final_model, aes(x = .resid)) + geom_histogram() + xlab("Residuals")
+
+2.4.3 Constant variability of the residuals : plot(final_model$residuals ~ final_model$fitted)
+
+2.4.4 Independent
+
+
+2.5 Prediction
+movies %>% filter(grepl("men", title) | grepl("apocalypse", title)) %>% select(title) -> XMen Apocalypse
+movie_predict_data <- data.frame(audience_score=66, genre = "Science Fiction & Fantasy", best_pic_nom = "yes", imdb_rating=7)
+predict(final_mode, movie_predict_data)
+critic score : 48%
+predicted : 77.14
+
+movies %>% filter(grepl("land", title) | grepl("la la", title)) %>% select(title)
+movie_predict_data <- data.frame(audience_score=81, genre = "Drama", best_pic_nom = "yes", imdb_rating=8.1)
+predict(final_model, movie_predict_data)
+91.97652
+
+Prediction interval : 
+-61.31470 +/- 5.86658*tdf

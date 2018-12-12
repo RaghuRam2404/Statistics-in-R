@@ -1,0 +1,311 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Table Of Contents
+<ul>
+  <li><a href="#load-packages">Load Packages</a></li>
+  <li><a href="#load-data">Load Data</a></li>
+  <li><a href="#part-1-data">Part 1: Data</a></li>
+  <li><a href="#part-2-research-questions">Part 2: Research questions</a></li>
+  <li><a href="#research-quesion-1">Research quesion 1 : Food, Exercise, Health</a></li>
+  <li><a href="#research-quesion-2">Research quesion 2 : Income, Personal Medical Professional, Medical Cost</a></li>
+  <li><a href="#research-quesion-3">Research quesion 3 : Income Vs Mental Healthyness</a></li>
+  <li><a href="#part-3-exploratory-data-analysis">Part 3: Exploratory data analysis</a>  </li>
+  <li><a href="#research-quesion-1-1">Research quesion 1 : Food, Exercise, Health</a></li>
+  <li><a href="#research-quesion-2-1">Research quesion 2 : Income, Personal Medical Professional, Medical Cost</a></li>
+  <li><a href="#research-quesion-3-1">Research quesion 3 : Income Vs Mental Healthyness</a></li>
+</ul>
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(statsr)
+```
+
+### Load data
+
+Make sure your data and R Markdown files are in the same directory. When loaded
+your data file will be called `brfss2013`. Delete this note when before you submit 
+your work. 
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+For this survey, the data is collected from a randomly selected adult in a household. But for the cellular telephone version of the survey, the data is collected from the people who are living in private residence or college housing.
+
+This process clearly involves random sampling. Hence the result obtained from the data will be more **generalizable**
+
+There is no random assignment of treatment to the random sampling, to take the survey. So the overall survey is not **causal**
+
+
+* * *
+
+## Part 2: Research questions
+
+###Research quesion 1:
+
+As the entire survey is about Behavioural risk factor, the first question is does this survey gives any data about one being healthy based on various input like food (fruits, vegetables, greens vegetables, orange vegetables) and physical exercises of any kind (based on how much time involved for it).
+
+Healthy can be described based on depression level, blood pressure, diabetes and kidney disease.
+
+So this involves variables
+<ol>
+<li>food</li>
+<li>exercise</li>
+<li>health conditions</li>
+</ol>
+
+###Research quesion 2:
+
+Does income play a major role in having one or more personal health professionals and taking decision on whether to see doctor or not?
+
+Variables Involved
+<ol>
+<li>income</li>
+<li>has personal health professional</li>
+<li>medcost</li>
+</ol>
+
+###Research quesion 3:
+
+And with regards to mental health, does income play a role in it?
+
+Variables involved
+<ol>
+<li>menthlth</li>
+<li>income2</li>
+</ol>
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+###Research quesion 1:
+
+For Food, we'll consider the variables <span style="color:red">fruit1</span> (cumulative frequency : 93.13%), <span style="color:red">fvbeans</span> (cumulative frequency : 92.38%), <span style="color:red">fvgreen</span> (cumulative frequency : 92.85%), <span style="color:red">fvorang</span> (cumulative frequency : 92.57%) and <span style="color:red">vegetab1</span> (cumulative frequency : 92.09%) . With respect to all the cumulative frequencies (with proper values), our conclusion will be a **generalized one**.
+
+
+Since the values are different as per day consumption, per week consumption and per month consumption, we will change it to a common base as no of fruits consumed in month as per below R code. 
+So, We'll create 5 new columns <span style="color:green">**fruit_consumption**</span>, <span style="color:green">**fvbeans_consumption**</span>, <span style="color:green">**fvgreen_consumption**</span>, <span style="color:green">**fvorang_consumption**</span> and <span style="color:green">**vegetab1_consumption**</span>, which will contain the per month consumption.
+
+```{r}
+brfss2013 <- brfss2013 %>% mutate(fruit_consumption = 
+                                    ifelse(fruit1>=101 & fruit1<=199, (fruit1-100)*30,
+                                           ifelse(fruit1>=201 & fruit1<=299, (fruit1-200)*4.5, 
+                                                  ifelse(fruit1>=300 & fruit1<=399, fruit1-300, 
+                                                         ifelse(is.na(fruit1),0,0)))
+))
+brfss2013 <- brfss2013 %>% mutate(fvbeans_consumption = 
+                                    ifelse(fvbeans>=101 & fvbeans<=199, (fvbeans-100)*30,
+                                           ifelse(fvbeans>=201 & fvbeans<=299, (fvbeans-200)*4.5, 
+                                                  ifelse(fvbeans>=300 & fvbeans<=399, fvbeans-300, 
+                                                         ifelse(is.na(fvbeans),0,0)))
+))
+brfss2013 <- brfss2013 %>% mutate(fvgreen_consumption = 
+                                    ifelse(fvgreen>=101 & fvgreen<=199, (fvgreen-100)*30,
+                                           ifelse(fvgreen>=201 & fvgreen<=299, (fvgreen-200)*4.5, 
+                                                  ifelse(fvgreen>=300 & fvgreen<=399, fvgreen-300, 
+                                                         ifelse(is.na(fvgreen),0,0)))
+))
+brfss2013 <- brfss2013 %>% mutate(fvorang_consumption = 
+                                    ifelse(fvorang>=101 & fvorang<=199, (fvorang-100)*30,
+                                           ifelse(fvorang>=201 & fvorang<=299, (fvorang-200)*4.5, 
+                                                  ifelse(fvorang>=300 & fvorang<=399, fvorang-300, 
+                                                         ifelse(is.na(fvorang),0,0)))
+))
+brfss2013 <- brfss2013 %>% mutate(vegetab1_consumption = 
+                                    ifelse(vegetab1>=101 & vegetab1<=199, (vegetab1-100)*30,
+                                           ifelse(vegetab1>=201 & vegetab1<=299, (vegetab1-200)*4.5, 
+                                                  ifelse(vegetab1>=300 & vegetab1<=399, vegetab1-300, 
+                                                         ifelse(is.na(vegetab1),0,0)))
+))
+```
+
+
+As we are going to concentrate overall, we'll have a new column <span style="color:green">**overall_fvo_consumption**</span> to know the overall consumption.
+```{r}
+brfss2013 <- brfss2013 %>% 
+  mutate(overall_fvo_consumption = fruit_consumption+fvbeans_consumption+fvgreen_consumption+fvorang_consumption+vegetab1_consumption)
+```
+
+
+
+
+Now, we'll create a new column <span style="color:green">**exercise_time_in_mins**</span> to store the overall time spent in physical work out. We'll make use of the variable <span style="color:red">exerhmm1</span> (cumulative frequency : 43.25%, so we'll take it as they didn't do exercise) for this.
+
+```{r}
+brfss2013 <- brfss2013 %>% 
+  mutate(exercise_time_in_mins = ifelse(!is.na(exerhmm1),(floor(exerhmm1/100)*60)+((exerhmm1/100)-floor(exerhmm1/100))*100,0))
+```
+
+
+
+
+
+Now that we have both food and exercise variable, we'll work on health variables <span style="color:red">bphigh4</span> (cumulative frequency : 99.71%), <span style="color:red">addepev2</span> (cumulative frequency : 99.89%), <span style="color:red">chckidny</span> (cumulative frequency : 99.95%) and <span style="color:red">diabete3</span> (cumulative frequency : 99.83%). We'll create 4 new variables for these 4 categorical variables with values as *1/0* (1 - have disease, 2 - no disease).
+
+```{r}
+brfss2013 <- brfss2013 %>% mutate(bp_level = ifelse(bphigh4 == "Yes" | bphigh4 == "Told borderline or pre-hypertensive", 1, 0))
+brfss2013 <- brfss2013 %>% mutate(dep_level = ifelse(addepev2 == "Yes", 1, 0))
+brfss2013 <- brfss2013 %>% mutate(kid_level = ifelse(chckidny == "Yes", 1, 0))
+brfss2013 <- brfss2013 %>% mutate(dia_level = ifelse(diabete3 == "Yes" | diabete3 == "No, pre-diabetes or borderline diabetes", 1, 0))
+```
+
+We'll create a common variable <span style="color:green">**health_level**</span> to denote the overall health as the sum of all 4 above newly created variables. **Min value denotes good health and bigger value denotes some health problem**.
+
+```{r}
+brfss2013 <- brfss2013 %>% mutate(health_level = bp_level+dep_level+kid_level+dia_level)
+```
+
+Let's take a summary stats of the variables and save it in <span style="color:green">**health_data**</span>
+```{r}
+health_data <- brfss2013 %>% 
+  filter(!is.na(overall_fvo_consumption), !is.na(health_level), !is.na(exercise_time_in_mins)) %>% 
+  group_by(health_level) %>% 
+  summarise(avg_food=mean(overall_fvo_consumption), avg_ex=mean(exercise_time_in_mins))
+```
+
+The content of **health_data** is 
+```{r}
+health_data
+```
+
+####2 observations made are
+**1. Let's check the plot of Health vs Excise**
+```{r}
+ggplot(data = health_data, aes(x=health_level, y=avg_ex)) + geom_line()
+```
+
+<b><u>Conclusion :</u> With more time spent in physical exercise, health will be good</b>
+
+
+**2. Let's check the plot of Health vs Excise**
+```{r}
+ggplot(data = health_data, aes(x=health_level, y=avg_food)) + geom_line()
+```
+
+<b><u>Conclusion :</u> With more and more of fruits/veggies, health will be good</b>
+
+
+###Research quesion 2:
+
+Does income play a major role in having one or more personal health professionals and taking decision on whether to see doctor or not?
+
+**Also to conclude if the people of <u>money conscious</u> or <u>health conscious</u> or <u>medical expense is too high</u>**
+
+Let's take a look at the comparison of income and if people has 1 or more personal medical professionals. From below, it is obvious that income plays a level for people who want to have 1 or more health care professionals. **Also due to income, more people with less income has no professional health professional compare to the people with more income**. 
+
+```{r}
+personal_doc_table = table(brfss2013$income2, brfss2013$persdoc2)
+mosaicplot(personal_doc_table, "Income vs # Personal Heath Professionals", xlab="Income", ylab="Personal Health Professionals")
+```
+
+Let's take a look at the comparison of income and medical cost which made people to not see doctor. From below, we can infer that even the people with more money hesitates to see doctors. **So it means that the medical expenses are high**
+```{r}
+mosaic_table = table(brfss2013$income2, brfss2013$medcost)
+mosaicplot(mosaic_table, "Income vs Seeing Doctor", xlab="Income", ylab="Seeing Doctor")
+```
+
+Let's look at the together comparison. **There is a small conclusion that even with people with more income and has more that 1 medical professional, still they opt not to see the doctor**
+```{r}
+mosaic_table = table(brfss2013$income2, brfss2013$persdoc2, brfss2013$medcost)
+mosaicplot(mosaic_table, "Income Category vs (persdoc2 vs medcost) ", xlab="Income category", ylab="persdoc2")
+```
+
+We need to look deeper. So we'll create a new data <span style="color:green">**health_income_persdoc2_medcost**</span> with only 3 deciding variables <span style="color:red">income2</span> (cumulative frequency : 85.48%), <span style="color:red">persdoc2</span> (cumulative frequency : 99.87%) and <span style="color:red">medcost</span> (cumulative frequency : 99.94%). New data will be grouped by income, persdoc2 and then medcost. We'll have one more column **probability** which holds the probability on whether a particular group (with income2 and persdoc2) will choose to go to see doctor or not.
+
+```{r}
+health_income_persdoc2_medcost <- brfss2013 %>% 
+  filter(!is.na(medcost), !is.na(income2), !is.na(persdoc2)) %>% 
+  group_by(income2, persdoc2, medcost) %>% 
+  summarize(n=n())
+
+health_income_persdoc2_medcost <- health_income_persdoc2_medcost %>% mutate(probability=0)
+```
+```{r}
+health_income_persdoc2_medcost
+```
+We have to create one more data <span style="color:green">**health_income_persdoc2**</span> to know the no of people in the income2 and persdoc2 specific group
+```{r}
+health_income_persdoc2 <- brfss2013 %>% 
+  filter(!is.na(medcost), !is.na(income2), !is.na(persdoc2)) %>% 
+  group_by(income2, persdoc2) %>% 
+  summarize(n=n())
+```
+```{r}
+health_income_persdoc2
+```
+Now we'll calculate the probability and save it in <span style="color:green">**health_income_persdoc2_medcost**</span> based on the group count calculated & saved in <span style="color:green">**health_income_persdoc2**</span>
+```{r}
+for(i in 1:dim(health_income_persdoc2_medcost)[1]){
+	
+  inc     <- data.frame(lapply(health_income_persdoc2_medcost[i,1], as.character), stringsAsFactors=FALSE)
+  persdoc <- data.frame(lapply(health_income_persdoc2_medcost[i,2], as.character), stringsAsFactors=FALSE)
+	
+  health_income_persdoc2_medcost <- health_income_persdoc2_medcost %>% 
+          mutate(probability = ifelse((income2 %in% inc & persdoc2 %in% persdoc), n/(health_income_persdoc2 %>% filter(income2 %in% inc, persdoc2 %in% persdoc))$n,probability))
+}
+```
+```{r}
+health_income_persdoc2_medcost
+```
+
+Now that we have all required data, let see some stats
+
+```{r}
+health_income_persdoc2_medcost %>%filter(medcost == "Yes", persdoc2 == "More than one") %>% arrange(desc(probability))
+```
+```{r}
+health_income_persdoc2_medcost %>%filter(medcost == "Yes", persdoc2 == "Yes, only one") %>% arrange(desc(probability))
+```
+```{r}
+health_income_persdoc2_medcost %>%filter(medcost == "Yes", persdoc2 == "No") %>% arrange(desc(probability))
+```
+
+In all the above cases, even people with less income preferred to have more than 1 personal health professional. But still they don't want to see the doctor due to the cost of the medical.
+This trend becomes less evident with people with more income.
+
+<b><u>Conclusion :</u> Even people with low income, they are all health conscious. But the medical cost is high, which causes people to not see the doctor</b>. It is evident from 44.2% of low level income people didn't go to see doctor even though they don't have any personal health professional.
+
+###Research quesion 3:
+
+As a final question, with regards to mentally healthy, does income play a role in it?
+
+Let's take a guess, people with moderate level of income should be mentally healthy compared to low level and high level incomes. Because low level income people will be stressed with the money and high level income people worrying about making more money.
+
+For this, we'll consider IQR to have a robust factor to measure the happiness. We'll create a new data <span style="color:green">**mental_health_data**</span> with the variables <span style="color:red">income2</span> (cumulative frequency : 85.48%) and <span style="color:red">menthlth</span> (cumulative frequency : 98.24%).
+
+```{r}
+mental_health_data <- brfss2013 %>% 
+  filter(!is.na(income2), !is.na(menthlth)) %>% 
+  group_by(income2) %>% 
+  summarize(iqr = IQR(menthlth)) %>% 
+  arrange(desc(iqr))
+```
+
+The data we obtained is 
+```{r}
+mental_health_data
+```
+
+Plot : 
+```{r}
+ggplot(data=mental_health_data, aes(x=income2, y=iqr)) + geom_bar(stat="identity")
+```
+
+<b><u>Conclusion :</u>So to be mentally healthy you need not have much income</b>
+

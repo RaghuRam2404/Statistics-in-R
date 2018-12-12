@@ -1,0 +1,55 @@
+project write up
+
+install.packages("devtools")
+install.packages("dplyr")
+library(devtools)
+install_github("StatsWithR/statsr")
+library(dplyr)
+library(statsr)
+
+1. sum(is.na(ames_train$Misc.Feature))+sum(is.na(ames_train$Fence))+sum(is.na(ames_train$Pool.QC))
+sum(is.na(ames_train$Misc.Feature))+sum(is.na(ames_train$Alley))+sum(is.na(ames_train$Pool.QC))
+sum(is.na(ames_train$Pool.QC))+sum(is.na(ames_train$Alley))+sum(is.na(ames_train$Fence))
+sum(is.na(ames_train$Fireplace.Qu))+sum(is.na(ames_train$Pool.QC))+sum(is.na(ames_train$Lot.Frontage))
+
+No
+sum(is.na(ames_train$Misc.Feature))	971
+sum(is.na(ames_train$Fence))		798
+sum(is.na(ames_train$Pool.QC))		997
+
+sum(is.na(ames_train$Misc.Feature))	971
+sum(is.na(ames_train$Alley))		933
+sum(is.na(ames_train$Pool.QC))		997
+
+sum(is.na(ames_train$Pool.QC))		997
+sum(is.na(ames_train$Alley))		933
+sum(is.na(ames_train$Fence))		798
+
+No
+sum(is.na(ames_train$Fireplace.Qu))	491
+sum(is.na(ames_train$Pool.QC))		997
+sum(is.na(ames_train$Lot.Frontage))	167
+
+ames_train <- ames_train %>% mutate(has_garage = 1)
+ames_train$has_garage[is.na(ames_train$Garage.Type)] <- 0
+inference(y = area, x = has_garage, data = ames_train, statistic = "mean", type = "ht", null = 0, alternative = "twosided", method = "theoretical")
+
+k0 = 3
+0 sqrt(k) = 1
+
+0 = 3/k
+3*sqrt(k)/k = 1
+
+9/k=1 => k=9
+		=> 0 = 1/3
+
+k* = 501+9 = 510
+0* = 0.000433
+
+n=2806
+obs = 501
+
+model_lm <- lm(log(price) ~ log(area), data=ames_train)
+ames_train$residuals <- model_lm$residuals
+o <- order(ames_train$residuals^2, decreasing=T) 
+ames_train[o[1:5],]

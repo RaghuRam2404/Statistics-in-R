@@ -1,0 +1,120 @@
+Peer
+
+https://www.neighborhoodscout.com/ia/ames/demographics
+
+Question 1 (5 points). Make a labeled histogram (with 30 bins) of the ages of the houses in the data set, and describe the distribution.
+
+    Must include a correctly labeled plot, and mention at least three relevant features of the distribution.
+
+Ans : 
+https://stackoverflow.com/questions/47000494/how-to-add-mean-and-mode-to-ggplot-histogram
+Features could be mean, median, mode, normal distribution, unimodal, symmetric, percentile, SD
+
+ames_train <- ames_train %>% mutate(age=2018-Year.Built)
+
+fun.mode<-function(x){as.numeric(names(sort(-table(x)))[1])}
+bw <- diff(range(ames_train$age)) / (2 * IQR(ames_train$age) / length(ames_train$age)^(1/3))
+
+p <- ggplot(data=ames_train, aes(x=age)) + geom_histogram(aes(y =..density..), bins=30) + geom_density(col="red")
+data<-ggplot_build(p)$data
+hist_peak<-data[[1]]%>%filter(y==max(y))%>%.$x
+dens_peak<-data[[2]]%>%filter(y==max(y))%>%.$x
+
+p%+%
+geom_vline(aes(xintercept = mean(age)),col='red')+
+  geom_vline(aes(xintercept = fun.mode(age)),col='blue')+
+  geom_vline(aes(xintercept = hist_peak),col='orange')+
+  geom_vline(aes(xintercept = dens_peak),col='purple') +
+  geom_text(aes(label=round(hist_peak,1),y=0,x=hist_peak), vjust=-1,col='orange',size=5)
+
+
+Question 2 (12 points). The mantra in real estate is "Location, Location, Location!" Make a graphical display that relates a home price to its neighborhood in Ames, Iowa. Which summary statistics are most appropriate to use for determining the most expensive, least expensive, and most heterogeneous (having the most variation in housing price) neighborhoods? Report which neighborhoods these are based on the summary statistics of your choice. Report the value of your chosen summary statistics for these neighborhoods.
+
+    Must include a graphic that is understandable, accurate, relevant to the question, and aesthetically pleasing. Also provide the correct summary statistics for the most expensive, least expensive and the most heterogenous neighborhoods, identify the correct neighborhoods and give the correct value of the summary statistics for each of those.
+
+Ans : https://en.wikipedia.org/wiki/Summary_statistics
+ggplot(data=ames_train %>% filter(Neighborhood == "Ames" | Neighborhood == 'Iowa'), aes(x=Neighborhood, y=price)) + geom_boxplot()
+ggplot(data=ames_train %>% filter(Neighborhood == 'Ames'), aes(x=Neighborhood, y=price)) + geom_boxplot()
+
+neighborhood_data <- ames_train %>% dplyr::select(price, Neighborhood)
+neighborhood_summary <- neighborhood_data %>% group_by(Neighborhood) %>% summarise(mean=mean(price), median=median(price), mode=mode(price), iqr=IQR(price), sd=sd(price), var=var(price), total=n())
+
+expense_neighborhood <- neighborhood_summary[which(neighborhood_summary$median == max(neighborhood_summary$median)),]
+cheap_neighborhood <- neighborhood_summary[which(neighborhood_summary$median == min(neighborhood_summary$median)),]
+het_neighborhood <- neighborhood_summary[which(neighborhood_summary$sd == max(neighborhood_summary$sd)),]
+
+ggplot(data=ames_train, aes(x = Neighborhood, y = price)) + geom_boxplot() + labs(title = "Housing prices per Neighborhood", x = 'Neighborhood', y = "Price") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+Question 3 (5 points). Which variable has the largest number of missing values? Explain why it makes sense that there are so many missing values for this variable.
+
+    Must specify the correct variable and give the correct explanation for why that variable has such a large number of missing values.
+
+Ans : 
+max_na = ""
+na_count = 0 
+for(col in names(ames_train)){
+	dat = as.vector(summary(ames_train[col]))
+	for(value in dat){
+		if(startsWith(value, "NA's")){
+			tempcount = as.numeric(trimws(unlist(strsplit(value,":"))[2]))
+			if(tempcount > na_count){
+				na_count = tempcount
+				max_na = col
+			}
+		}
+	}
+}
+
+Question 4 (10 points). We want to predict the natural log of the home prices. Candidate explanatory variables are lot size in square feet (Lot.Area), slope of property (Land.Slope), original construction date (Year.Built), remodel date (Year.Remod.Add), and the number of bedrooms above grade (Bedroom.AbvGr). Pick a model selection or model averaging method covered in the Specialization, and describe how this method works. Then, use this method to find the best multiple regression model for predicting the natural log of the home prices.
+
+    Must choose one of the model selection methods covered in the Specialization, include a correct description of how the chosen model selection method works, and include the best multiple regression model (determined by using that method) for predicting the natural log of home prices.
+
+Ans : 
+ames_train <- ames_train %>% mutate(log_price=log(price))
+model <- bas.lm(log_price ~ Lot.Area + Land.Slope + Year.Built + Year.Remod.Add + Bedroom.AbvGr, prior="BIC", modelprior=uniform(), data=ames_train)
+summary(model)
+image(model,rotate = FALSE)
+
+
+Question 5 (8 points). Which home has the largest squared residual in the previous analysis (Question 4)? Looking at all the variables in the data set, can you explain why this home stands out from the rest (what factors contribute to the high squared residual and why are those factors relevant)?
+
+    Must identify the home with the largest squared residual, specify the correct factors that contribute to the high squared residual and correctly explain why those factors impacted the squared residual.
+
+model_predict <- lm(log_price ~ Lot.Area + Land.Slope + Year.Built + Year.Remod.Add + Bedroom.AbvGr, data=ames_train)
+summary(model_predict)
+plot(model_predict,which=1,main="House #428 has greatest magnitude residual")
+ames_train[428,] %>% select(PID,Lot.Area, Land.Slope, Year.Built, Year.Remod.Add, Bedroom.AbvGr)
+
+house_428 <- data.frame(Lot.Area = 9656, Land.Slope = "Gtl", Year.Built = 1923, Year.Remod.Add=1970, Bedroom.AbvGr=2)
+predict(model_predict, ames_train[428,])
+
+This property has the lowest price in the entire data set. The difference in prediction is due to variables which are not included in the model. Eg: 
+Variables 										| No of occurrences
+------------------------------------------------|--------------------------------------
+Overall.Qual and Overall.Cond are both “poor”	| 	only 2 out of 1000 houses
+Sale.Condition is abnormal  which is true		|	only 61 out of 1000 houses.
+
+It is obvious that poor quality, poor condition, and a foreclosure will all impact price in a very strong and negative way.
+
+Question 6 (5 points). Use the same model selection method you chose in Question 4 to again find the best multiple regression model to predict the natural log of home prices, but this time replacing Lot.Area with log(Lot.Area). Do you arrive at a model including the same set of predictors?
+
+    Must correctly state whether or not one arrives at the same set of predictors using log(Lot.Area) as with Lot.Area, in the multiple regression model created using the chosen model selection method. 
+
+ames_train <- ames_train %>% mutate(log_larea=log(Lot.Area))
+model_larea <- bas.lm(log_price ~ log_larea + Land.Slope + Year.Built + Year.Remod.Add + Bedroom.AbvGr, prior="BIC", modelprior=uniform(), data=ames_train)
+summary(model_larea)
+
+Question 7 (10 points). Do you think it is better to log transform Lot.Area, in terms of assumptions for linear regression? Make graphs of the predicted values of log home price versus the true values of log home price for the regression models selected for Lot.Area and log(Lot.Area). Referencing these two plots, provide a written support that includes a quantitative justification for your answer in the first part of question 7.
+
+    Must state whether or not log transformation of Lot.Area helps the multiple regression model. Must include two appropriate graphs, and include an explanation of the first answer that references the graphs (in other words, explain how the graphs support the answer) 
+
+model_lprice_larea <- lm(log_price ~ log_larea + Year.Built +  Year.Remod.Add + Bedroom.AbvGr, data=ames_train)
+summary(model_lprice_larea)
+
+ames_train$fitted_lprice <- model_predict$fitted.values
+ames_train$fitted_lprice_larea <- model_lprice_larea$fitted.values
+ames_train %>% ggplot(aes(y=log_price,x=fitted_lprice)) + geom_point() + geom_smooth(method="lm") + ggtitle("Log(price) vs Lot.Area")
+ames_train %>% ggplot(aes(y=log_price,x=fitted_lprice_larea)) + geom_point() + geom_smooth(method="lm") + ggtitle("Log(price) vs Log(Lot.Area)")
+
+ames_train %>% ggplot(aes(x=Lot.Area,y=log_price)) + geom_smooth(method="lm") + geom_point() + ggtitle("Lot.Area vs log(price)")
+ames_train %>% ggplot(aes(x=log_larea,y=log_price)) + geom_smooth(method="lm") + geom_point() + ggtitle("log(Lot.Area) vs log(price)")

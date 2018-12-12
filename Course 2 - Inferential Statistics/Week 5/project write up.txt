@@ -1,0 +1,132 @@
+gss %>% group_by(wrkstat) %>% summarise(count = n())
+
+gss %>% group_by(confed) %>% summarise(count = n())
+gss %>% group_by(conbus) %>% summarise(count = n())
+gss %>% group_by(coneduc) %>% summarise(count = n())
+gss %>% group_by(conpress) %>% summarise(count = n())
+gss %>% group_by(confinan) %>% summarise(count = n())
+gss %>% group_by(conmedic) %>% summarise(count = n())
+gss %>% group_by(conjudge) %>% summarise(count = n())
+
+<font color="red"></font>
+<font color="green"></font>
+
+A Great Deal
+Only Some
+Hardly Any
+
+gss <- gss %>% mutate(confidence_fed = ifelse(confed == "A Great Deal", 1, ifelse(confed == "Only Some", 0.5, 0)));
+gss %>% group_by(confidence_fed) %>% summarise(count = n())
+
+
+gss <- gss %>% mutate(confidence_bus = ifelse(conbus == "A Great Deal", 1, ifelse(conbus == "Only Some", 0.5, 0)));
+gss %>% group_by(confidence_bus) %>% summarise(count = n())
+
+
+gss <- gss %>% mutate(confidence_educ = ifelse(coneduc == "A Great Deal", 1, ifelse(coneduc == "Only Some", 0.5, 0)));
+gss %>% group_by(confidence_educ) %>% summarise(count = n())
+
+
+gss <- gss %>% mutate(confidence_press = ifelse(conpress == "A Great Deal", 1, ifelse(conpress == "Only Some", 0.5, 0)));
+gss %>% group_by(confidence_press) %>% summarise(count = n())
+
+
+gss <- gss %>% mutate(confidence_finan = ifelse(confinan == "A Great Deal", 1, ifelse(confinan == "Only Some", 0.5, 0)));
+gss %>% group_by(confidence_finan) %>% summarise(count = n())
+
+
+gss <- gss %>% mutate(confidence_medic = ifelse(conmedic == "A Great Deal", 1, ifelse(conmedic == "Only Some", 0.5, 0)));
+gss %>% group_by(confidence_medic) %>% summarise(count = n())
+
+
+gss <- gss %>% mutate(confidence_judge = ifelse(conjudge == "A Great Deal", 1, ifelse(conjudge == "Only Some", 0.5, 0)));
+gss %>% group_by(confidence_judge) %>% summarise(count = n())
+
+gss <- gss %>% mutate(confidence = (confidence_fed+confidence_bus+confidence_educ+confidence_press+confidence_finan+confidence_medic+confidence_judge)/7)
+gss %>% group_by(confidence) %>% summarise(count = n())
+
+ggplot(data=gss %>% filter(wrkstat=="Working Fulltime", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Working Parttime", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Temp Not Working", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Unempl, Laid Off", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Retired", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="School", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+ggplot(data=gss %>% filter(wrkstat=="Keeping House", !is.na(wrkstat)), aes(x=confidence)) + geom_histogram()
+
+
+var((gss %>% filter(wrkstat == "Working Fulltime" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Working Parttime" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Temp Not Working" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Unempl, Laid Off" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Retired" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "School" , !is.na(confidence)))$confidence)
+var((gss %>% filter(wrkstat == "Keeping House" , !is.na(confidence)))$confidence)
+
+boxplot for checking the 
+ggplot(data=gss, aes(x=factor(wrkstat), y=confidence)) + geom_boxplot() 
+gss %>% filter(!is.na(confidence)) %>% group_by(wrkstat) %>% summarise(iqr = IQR(confidence), mean=mean(confidence), sd=sd(confidence), count=n()) %>% arrange(desc(iqr))
+
+
+
+ANOVA
+gss %>% filter(!is.na(confidence)) %>% group_by(wrkstat) %>% summarise(mean=mean(confidence), count=n())
+gss %>% filter(!is.na(confidence)) %>% group_by(wrkstat) %>% summarise(mean=mean(confidence))
+gss %>% filter(!is.na(confidence)) %>% summarise(mean=mean(confidence))
+y bar = 3.825647
+
+gss <- gss %>% mutate(sst=(confidence-3.8256)*(confidence-3.8256))
+SST <- gss %>% filter(!is.na(sst)) %>% summarize(SST=sum(sst))
+						DF		SS 			MS 		p-val 	pr(>F)
+Group 	Class			7		265.271		37.9	29.73
+Error	Residuals 		57060 	72775.83	1.275
+		Total					73041.1
+
+If there is any difference in confidence level on Gov for Working Fulltime vs unemployed
+ so k=8*7/2 = 28
+
+X bar wf = 3.86
+X bar un = 3.70
+Xbar wf - un = .16
+n wf = 18826
+n un = 1247
+MSE = 1.275
+T statistic = 0.16/0.033 = 4.85
+p-value = 2*pt(4.85, df=57060, lower.tail=FALSE)
+.05/28 = .0017
+1.237862e-06 reject Ho
+
+So confident level varies with each work status
+
+inference(y=confidence, x=wrkstat, data=gss %>% filter(!is.na(confidence)), type="ht", statistic = "mean", null=0, sig_level = 0.05, method="theoretical", alternative="greater")
+
+Reject P0
+so there is a difference based on the work status
+
+
+work_full_data <- gss %>% filter(!is.na(confidence), wrkstat == "Working Fulltime") %>% select(confidence)
+work_full_result <- inference(y=confidence, data=work_full_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+work_full_result$CI
+work_part_data <- gss %>% filter(!is.na(confidence), wrkstat == "Working Parttime") %>% select(confidence)
+work_part_data_result <- inference(y=confidence, data=work_part_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+work_part_data_result$CI
+temp_not_working_data <- gss %>% filter(!is.na(confidence), wrkstat == "Temp Not Working") %>% select(confidence)
+temp_not_working_result <- inference(y=confidence, data=temp_not_working_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+temp_not_working_result$CI
+unemp_data <- gss %>% filter(!is.na(confidence), wrkstat == "Unempl, Laid Off") %>% select(confidence)
+unemp_result <- inference(y=confidence, data=unemp_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+unemp_result$CI
+retired_data <- gss %>% filter(!is.na(confidence), wrkstat == "Retired") %>% select(confidence)
+retired_result <- inference(y=confidence, data=retired_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+retired_result$CI
+school_data <- gss %>% filter(!is.na(confidence), wrkstat == "School") %>% select(confidence)
+school_result <- inference(y=confidence, data=school_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+school_result$CI
+keeping_house_data <- gss %>% filter(!is.na(confidence), wrkstat == "Keeping House") %>% select(confidence)
+keeping_house_result <- inference(y=confidence, data=keeping_house_data, type="ci", statistic = "mean", null=0, sig_level = 0.05, method="theoretical")
+keeping_house_result$CI
+
+ci_id <- c("Working Fulltime","Working Parttime", "Temp Not Working","Unempl, Laid Off", "Retired", "School", "Keeping House")
+ci_bounds <- c(work_full_result$CI, work_part_data_result$CI, temp_not_working_result$CI, unemp_result$CI, retired_result$CI, school_result$CI, keeping_house_result$CI)
+ci_data <- data.frame(ci_id,ci_bounds)
+
+ggplot(data = ci_data, aes(x = ci_bounds, y = ci_id, group = ci_id)) + geom_point(size = 2) +  geom_line() + geom_vline(xintercept = (gss %>% filter(!is.na(confidence)) %>% summarise(mean=mean(confidence)))$mean, color = "darkgray")

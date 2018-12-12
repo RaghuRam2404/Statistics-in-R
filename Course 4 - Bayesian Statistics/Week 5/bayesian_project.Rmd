@@ -1,0 +1,331 @@
+
+###Table of Contents
+
+* [Part 1: Data](#part-1-data)
+* [Part 2: Data Manipulation](#part-2-data-manipulation)
+* [Part 3: Exploratory data analysis](#part-3-exploratory-data-analysis)
+    + [Part 3.1 : Between seasons and audience score](#part-3.1-between-seasons-and-audience-score)
+    + [Part 3.2 : Between feature_film and audience score](#part-3.2-between-feature_film-and-audience-score)
+    + [Part 3.3 : Audience score vs drama](#part-3.3-audience-score-vs-drama)
+    + [Part 3.4 : Audience score vs mpaa_rating_R](#part-3.4-audience-score-vs-mpaa_rating_r)
+* [Part 4: Modeling](#part-4-modeling)
+    + [Part 4.1 : Model Selection](#part-4.1-model-selection)
+    + [Part 4.2 : Model diagnostics](#part-4.2-model-diagnostics)
+    + [Part 4.3 : Interpretation of the model co-efficients](#part-4.3-interpretation-of-the-model-co-efficients)
+* [Part 5: Prediction](#part-5-prediction)
+* [Part 6: Conclusion](#part-6-conclusion)
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(MASS)
+library(tidyverse)
+library(statsr)
+library(BAS)
+library(broom)
+```
+
+### Load data
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+* * *
+
+## Part 1: Data
+
+
+As it was mentioned first that the data set is comprised of 651 *randomly sampled* movies produced and released before 2016, we can conclude that the conclusion derived are generalizable and can be applied to the population.
+
+It is *not causal* as there is no random assignment. So we can't find reason on why people like a movie or not.
+
+
+* * *
+
+## Part 2: Data manipulation
+
+creating additional variables
+```{r}
+movies <- movies %>% mutate(feature_film = ifelse(title_type == "Feature Film", "yes", "no"))
+movies <- movies %>% mutate(drama = ifelse(genre == "Drama", "yes", "no"))
+movies <- movies %>% mutate(mpaa_rating_R = ifelse(mpaa_rating == "R", "yes", "no"))
+movies <- movies %>% mutate(oscar_season = ifelse(thtr_rel_month == 10 | thtr_rel_month == 11 | thtr_rel_month == 12, "yes", "no"))
+movies <- movies %>% mutate(summer_season = ifelse(thtr_rel_month == 5 | thtr_rel_month == 6 | thtr_rel_month == 7 | thtr_rel_month == 8, "yes", "no"))
+```
+```{r}
+str(movies$feature_film)
+str(movies$drama)
+str(movies$mpaa_rating_R)
+str(movies$oscar_season)
+str(movies$summer_season)
+
+```
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+### Part 3.1 : Between seasons and audience score
+
+```{r}
+ggplot(movies, aes(x = factor(summer_season), y = audience_score)) + geom_boxplot()
+ggplot(movies, aes(x = factor(oscar_season), y = audience_score)) + geom_boxplot()
+```
+
+Seems there is no difference based on the season in which the movie is released, as the plot looks similar in both the cases. So these variables are not at all related to each other.
+
+### Part 3.2 : Between feature_film and audience score
+
+```{r}
+ggplot(movies, aes(x = factor(feature_film), y = audience_score)) + geom_boxplot()
+```
+
+Compared to the 'feature films' other types like 'Documentaries and TV movies' get much higher rating
+
+
+### Part 3.3 : Audience score vs drama
+
+```{r}
+movies %>% group_by(drama) %>% summarise(min=min(audience_score), max=max(audience_score), iqr=IQR(audience_score), sd=sd(audience_score))
+ggplot(movies, aes(x = factor(drama), y = audience_score)) + geom_boxplot()
+```
+
+In case of Drama, people preferred it a bit more than non-drama movies (based on 25-75% quantiles)
+
+### Part 3.4 : Audience score vs mpaa_rating_R
+
+```{r}
+movies %>% group_by(mpaa_rating_R) %>% summarise(min=min(audience_score), max=max(audience_score), iqr=IQR(audience_score), sd=sd(audience_score))
+ggplot(movies, aes(x = factor(mpaa_rating_R), y = audience_score)) + geom_boxplot()
+```
+
+Seems not much of a difference in the audience score
+
+* * *
+
+## Part 4: Modeling
+
+### Part 4.1 : Model Selection
+For this, we will use <span color='green'>backward elimination with BIC</span> . Let's include all the params and get the BIC.
+
+```{r}
+movies_no_na <- na.omit(movies)
+
+mlm_movie <- lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + oscar_season + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, data = movies_no_na)
+
+BIC(mlm_movie)
+```
+
+BIC is ```4716.774```
+
+```{r}
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + oscar_season + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win, data = movies_no_na))
+```
+
+BIC is ```4710.428```. So remove the variable ```top200_box```
+
+```{r}
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win, data = movies_no_na))
+```
+
+BIC is ```4704.099```, so remove the variable ```oscar_season```
+
+```{r}
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actor_win + best_actress_win + best_dir_win, data = movies_no_na))
+```
+
+BIC is ```4698.11```, so remove the variable ```best_pic_win```
+
+```{r}
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actor_win + best_actress_win, data = movies_no_na))
+```
+
+BIC is ```4692.601```, so remove the variable ```best_dir_win```
+
+```{r}
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))
+```
+
+BIC is ```4687.432```, so remove the variable ```best_actor_win```
+
+```{r}
+BIC(lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))
+```
+
+BIC is ```4682.776```, so remove the variable ```summer_season```
+
+```{r}
+BIC(lm(audience_score ~ drama + runtime + mpaa_rating_R + thtr_rel_year + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))
+```
+
+BIC is ```4678.23```, so remove the variable ```feature_film```
+
+```{r}
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + thtr_rel_year + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))
+```
+
+BIC is ```4673.041```, so remove the variable ```drama```
+
+```{r}
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + thtr_rel_year + imdb_rating + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))
+```
+
+BIC is ```4668.281```, so remove the variable ```imdb_num_votes```
+
+```{r}
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + imdb_rating + critics_score + best_pic_nom + best_actress_win, data = movies_no_na))
+```
+
+BIC is ```4663.531```, so remove the variable ```thtr_rel_year```
+
+```{r}
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + imdb_rating + critics_score + best_pic_nom, data = movies_no_na))	
+```
+
+BIC is ```4660.204```, so remove the variable ```best_actress_win```
+
+```{r}
+BIC(lm(audience_score ~ runtime + mpaa_rating_R + imdb_rating + critics_score, data = movies_no_na))
+```
+
+BIC is ```4656.76```, so remove the variable ```best_pic_nom```
+
+```{r}
+BIC(lm(audience_score ~ runtime + imdb_rating + critics_score, data = movies_no_na))
+```
+
+BIC is ```4653.581```, so remove the variable ```mpaa_rating_R```
+
+We can't remove anything else. Our final variables are ```runtime```, ```critics_score``` and ```imdb_rating```
+
+### Part 4.2 : Model diagnostics
+
+The Bayesian model specification assumes that the errors are normally distributed with a constant variance and that the mean expected weekly wages is linear in IQ. We can check these assumption by examining the distribution of the residuals for the model.
+
+In order to do so we will use predicted values, residuals, and standardized residuals of the model we fit earlier. The augment function in the broom package is going to come in handy here as it takes in a model object (the output of an ``lm``) and returns a data frame with columns correspinding to variables in the model as well as predicted values (```.fitted```), residuals (```.resid```), and standardized residuals (```.std.resid```), along with a few others.
+
+```{r}
+mlm_movie_model <- lm(audience_score ~ runtime + imdb_rating + critics_score, data = movies_no_na)
+summary(mlm_movie_model)
+mlm_movie_model_aug <- augment(mlm_movie_model)
+```
+
+#### Part 4.2.1 : Linearity and Constant Variance:
+
+We can verify this condition with a plot of the residuals vs. fitted (predicted) values.
+
+```{r}
+ggplot(data = mlm_movie_model_aug, aes(x = .fitted, y = .resid)) +
+  geom_point(alpha = 0.6) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Fitted values", y = "Residuals")
+```
+
+#### Part 4.2.2 : Normality: 
+
+To check this condition, we can look at a histogram of residuals
+
+```{r}
+ggplot(data = mlm_movie_model_aug, aes(x = .resid)) +
+  geom_histogram() +
+  xlab("Residuals")
+
+```
+
+or a normal probability plot of the residuals
+
+```{r}
+ggplot(mlm_movie_model_aug) +
+  geom_qq(aes(sample = .std.resid)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(x = "Theoretical quantiles", y = "Standardized residuals")
+```
+
+#### Part 4.2.3 : Outliers
+
+```{r}
+outliers <- Bayes.outlier(mlm_movie_model, k = 3)
+outliers_df <- data.frame(probability = outliers$prob.outlier,
+                          case = 1:length(outliers$prob.outlier))
+ggplot(outliers_df, aes(ymax = probability, x = case)) +
+  geom_linerange(ymin = 0) +
+  labs(y = "Probability")
+```
+
+Outliers with prob > 0.5 is
+
+```{r}
+outliers_df %>%
+  filter(probability > 0.50)
+```
+
+
+All conditions are checked. We are good to go.
+
+### Part 4.3 : Interpretation of the model co-efficients
+
+Build model with the predicted params
+
+```{r}
+bma_movie_model <- bas.lm(audience_score ~ runtime + imdb_rating + critics_score, data = movies_no_na,
+                   prior = "BIC", 
+                   modelprior = uniform())
+
+bma_movie_model
+coef_movie <- coefficients(bma_movie_model)
+coef_movie
+
+```
+
+From the co-efficients, for the prediction of the ```audience_score``` we need ```intercept 100%```, ```imdb_rating 100%```, ```critics_score 93.233%``` and with a very less ```53.966% runtime```.
+
+Same can be visually interpreted as
+
+```{r}
+plot(coef_movie, subset = c(1,2,3,4), ask = FALSE)
+```
+
+* * *
+
+## Part 5: Prediction
+
+Let's predict the ```audience_score``` for the 2016 movie ```ROGUE ONE: A STAR WARS STORY``` using ```BMA```
+
+First check if it already there in the sample
+```{r}
+movies %>% filter(grepl("rogue", title) | grepl("star", title)) %>% select(title)
+```
+
+No, it is safe to proceed.
+
+```{r}
+movie_pred <- data.frame(runtime = c(133), imdb_rating=c(7.8), critics_score=c(84))
+bma_predict <- predict(bma_movie_model, newdata=movie_pred, se.fit = TRUE, estimator = "BMA")
+ci_bma_predict_movie <- confint(bma_predict, estimator = "BMA")
+ci_bma_predict_movie
+```
+
+Original Audience Score is ```86%```
+
+Predicted Audience Score is ```83%```
+
+It is a acceptable score. Hence our model works
+
+References : [IMDB Link](https://www.imdb.com/title/tt3748528/) and [Rotten tomatoes link](https://www.rottentomatoes.com/m/rogue_one_a_star_wars_story/)
+
+![Rotten Tomotoes](https://i.ibb.co/C5WGyKZ/Screen-Shot-2018-11-25-at-11-20-36-PM.png)
+![IMDB](https://i.ibb.co/xYNKrPR/Screen-Shot-2018-11-25-at-11-20-44-PM.png)
+
+* * *
+
+## Part 6: Conclusion
+
+1. All else held constants, having the ```imdb_rating``` (with 100%) in our model will increase the ```audience_score``` by ```14.95043``` compared to increase of only ```0.07531``` by ```critics_score``` (with 93.233%). So it is clear that imdb rating (given by users) are weighed more than critics score
+
+2. Some good params like ```mpaa_rating_R```, ```best_pic_nom```, ```best_pic_win``` has no voice over the ```audience_score```
+
+
+So to conclude, ```audience_score``` even though it is directly related to people's opinion as ```critic???s score```/```imdb_rating```, but factors like ```runtime``` plays a major role but not ```best_pic_win```/```mpaa_rating_R```.
+
+But there are cases where the model fails if the critics like the movie too much and film type is of non-drama, the audience score???s could be low due to other factors like bad movie plot. As adj-r-squared value is ```74.7%```, there are still hefty of chances where the prediction will still go wrong.

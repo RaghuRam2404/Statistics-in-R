@@ -1,0 +1,831 @@
+---
+title: "Peer Assessment II"
+output:
+  html_document: 
+    pandoc_args: [
+      "--number-sections",
+    ]
+---
+
+# Background
+
+As a statistical consultant working for a real estate investment firm, your task is to develop a model to predict the selling price of a given home in Ames, Iowa. Your employer hopes to use this information to help assess whether the asking price of a house is higher or lower than the true value of the house. If the home is undervalued, it may be a good investment for the firm.
+
+# Training Data and relevant packages
+
+In order to better assess the quality of the model you will produce, the data have been randomly divided into three separate pieces: a training data set, a testing data set, and a validation data set. For now we will load the training data set, the others will be loaded and used later.
+
+```{r load, message = FALSE}
+load("ames_train.Rdata")
+```
+
+Use the code block below to load any necessary packages
+
+```{r packages, message = FALSE}
+library(statsr)
+library(PairedData)
+library(dplyr)
+library(ggplot2)
+library(devtools)
+library(MASS)
+library(BAS)
+```
+
+## Part 1 - Exploratory Data Analysis (EDA)
+
+Let's check some relations between variables which we can make use of in the later stages.
+
+### Part 1.1 : Age vs Price
+
+We will create a new variable ```age```, as we will use in many cases.
+```{r}
+ames_train <- ames_train %>% mutate(age=2018-Year.Built)
+```
+
+As normally we all think what is the relation between ```price``` and ```age```
+
+```{r creategraphs}
+ggplot(data=ames_train, aes(x=age)) + geom_histogram(aes(y =..density..), bins=30) + geom_density(col="red") +
+  geom_vline(aes(xintercept = mean(age)),col='red')+
+  geom_vline(aes(xintercept = median(age)),col='blue')+
+  geom_text(data = ames_train, aes( x = (mean(ames_train$age)), y = .015, label = 'mean', col='red'), size = 3, parse = T) +
+  geom_text(data = ames_train,aes( x = (median(ames_train$age)),y = .020,  label = 'median'), col='blue', size = 3, parse = T)
+```
+
+Plot shows the ```multimodal distribution``` and the ```right skewness```. It means that we may need to use robust statistics.
+
+```{r}
+summary(ames_train$age)
+```
+
+Above summary statistics show that 50% of the houses are aged between 17 and 63 years. And 50% of houses are less than 43 years old.
+
+```{r}
+summary(ames_train$price)
+```
+
+Above summary statistics show that houses are sold at a max of $615,000. And 50% of houses are priced between 130k and 180k approximately.
+
+Let's see their relation ship
+
+```{r}
+ggplot(data=ames_train, aes(x=log(age), y=log(price))) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+```
+
+Taken log of price and age. They are better in finding the good relation due to skewness (as seen in Peer assignment 1). From the plot, as the age increases, the price decreases.
+
+### Part 1.2 : Sale Condition vs Price
+
+What kind of houses are sold a lot?
+
+Cookbook data : 
+```
+Sale Type (Nominal): Type of sale
+		
+       WD - Warranty Deed - Conventional
+       CWD - Warranty Deed - Cash
+       VWD - Warranty Deed - VA Loan
+       New - Home just constructed and sold
+       COD - Court Officer Deed/Estate
+       Con - Contract 15% Down payment regular terms
+       ConLw - Contract Low Down payment and low interest
+       ConLI - Contract Low Interest
+       ConLD - Contract Low Down
+       Oth - Other
+		
+Sale Condition (Nominal): Condition of sale
+
+       Normal -	Normal Sale
+       Abnorml - Abnormal Sale -  trade, foreclosure, short sale
+       AdjLand- Adjoining Land Purchase
+       Alloca	- Allocation - two linked properties with separate deeds, typically condo with a garage unit	
+       Family	- Sale between family members
+       Partial- Home was not completed when last assessed (associated with New Homes)
+```
+
+```{r}
+mosaic_table = table(ames_train$Sale.Condition, ames_train$Sale.Type)
+mosaicplot(mosaic_table, "Sale Condition vs Sale Type", xlab="Sale Condition", ylab="Sale Type", color = 2:5, dir=c("v","h"), las=2, off=20)
+```
+
+Inferences
+
+* We can observe that houses with normal conditions are sold in high percentage with warranty deed
+* Even ```Sale.Condition``` Abnormal houses are sold in good numbers compared to others (except Normal)
+* Sale between family members ```Sale.Condition == "Family"``` are also good with good ```Sale.Type```
+* Adjoining Land Purchase ```Sale.Condition == "AdjLand"``` is very small compared to all other sale conditions
+
+Corresponding summary stats
+```{r}
+ames_train %>% filter(!is.na(Sale.Condition)) %>% group_by(Sale.Condition) %>% summarise(count=n(), mean=mean(price), median=median(price), IQR=IQR(price), min=min(price), max=max(price), sd=sd(price))
+```
+
+* ```Normal``` and ```Abnormal``` houses are sold in relatively near price compared to ```AdjLand```,```Family``` and ```Alloca```
+* ```Partial``` has much variance compared to very low variance of ```Alloca```, ```Family``` and ```AdjLand``` (check the plot below too)
+
+```{r}
+ggplot(data=ames_train, aes(x=factor(Sale.Condition), y=price)) + geom_boxplot()
+```
+
+```{r}
+ames_train %>% ggplot(aes(x=price))+
+	geom_histogram(aes(fill=factor(ames_train$Sale.Condition)))+
+	labs(title="Price distribution by Sale.Condition", xlab="Price", ylab="House Count", fill="Sale.Condition", color=1:5)
+```
+
+This plot also shows that the ```house price skewness``` is influenced partially by ```Sales not done in Normal condition```.
+
+### Part 1.3 : Living Area vs Price vs Overall.Qual
+
+Heat Map of the log(area) vs log(price) gives us where the population density is concentrated. It can see that inferenced that many homes are chosen for the area between ```exp(7.0)``` (1096) to ```exp(7.3)``` (1480) square feet with the price range around ```exp(12)``` ($162,754)
+
+```{r}
+ggplot(data=ames_train, aes(x=log(area), y=log(price),color = "red")) + 
+  geom_point() + 
+  stat_density_2d(aes(fill = ..level..), geom="polygon") + 
+  scale_fill_gradient(low="blue", high="red") + 
+  stat_smooth(method = "lm", se = FALSE)
+```
+
+Below plot can be used to know the  ```Overall.Qual``` based distribution. It is to know what kind of quality homes present in what area. Eg: lower quality homes are mostly present in the bottom left while higher quality homes are in the top right
+
+```{r message=FALSE}
+ggplot(data=ames_train, aes(x=log(area), y=log(price), color=factor(Overall.Qual), size=factor(Overall.Qual))) + 
+  geom_point(alpha=0.4) + 
+  scale_color_manual(values = c("red","green","yellow","purple","blue","pink","orange","black","violet","grey")) 
+```
+
+### Part 1.4 : Some other camparisons
+
+#### Part 1.4.1 : area vs price
+```{r}
+ames_train %>% ggplot(aes(x=area ,y=log(price)))+ geom_point(color="red")+ geom_smooth(method = "lm", fill="blue")
+ames_train %>% ggplot(aes(x=log(area) ,y=log(price)))+ geom_point(color="red")+ geom_smooth(method = "lm", fill="blue")
+```
+
+```We'll use log(area) and log(price) for the analysis instead of just area and price``` to adjust to the right skewness of the price
+
+```{r}
+histogram(ames_train$price)
+```
+
+#### Part 1.4.2 : Bldg.Type vs price
+
+```{r}
+ames_train %>% ggplot(aes(x=Bldg.Type ,y=log(price), fill=Bldg.Type))+ geom_point(color="red")+ geom_boxplot()
+```
+
+```Fam``` and ```Twnhs``` has good variability
+
+#### Part 1.4.3 : Sale.Type vs price
+
+```{r}
+ames_train %>% ggplot(aes(x=Sale.Type ,y=log(price), fill=Sale.Type))+ geom_point(color="red")+ geom_boxplot()
+```
+
+* * *
+
+## Part 2 - Development and assessment of an initial model, following a semi-guided process of analysis
+
+Based on EDA, we'll choose the below variables , ```area```, ```Lot.Area```, ```price```, ```age```, ```Bldg.Type```, ```Neighborhood```, ```Sale.Type```, ```Sale.Condition```, ```Bsmt.Qual``` and ```Bedroom.AbvGr``` for the initial model analysis. Some params like ```Bsmt.Qual```, ```Neighborhood```, ```Lot.Area``` are chosen on assumption
+
+Let's check for NA values first.
+
+```{r}
+NA_count_cols <- c("area", "Lot.Area", "price", "age", "Bldg.Type", "Neighborhood", "Sale.Type", "Sale.Condition", "Bsmt.Qual", "Bedroom.AbvGr")
+NA_count <- c(dim(ames_train[which(is.na(ames_train$area)),])[[1]], dim(ames_train[which(is.na(ames_train$Lot.Area)),])[[1]], dim(ames_train[which(is.na(ames_train$price)),])[[1]], dim(ames_train[which(is.na(ames_train$age)),])[[1]], dim(ames_train[which(is.na(ames_train$Bldg.Type)),])[[1]], dim(ames_train[which(is.na(ames_train$Neighborhood)),])[[1]], dim(ames_train[which(is.na(ames_train$Sale.Type)),])[[1]], dim(ames_train[which(is.na(ames_train$Sale.Condition)),])[[1]], dim(ames_train[which(is.na(ames_train$Bsmt.Qual) | ames_train$Bedroom.AbvGr == ""),])[[1]], dim(ames_train[which(is.na(ames_train$Bedroom.AbvGr)),])[[1]])
+
+NA_data = data.frame(var_name = NA_count_cols, NA_count)
+
+NA_data
+```
+
+Only ```Bsmt.Qual``` has NA values. As NA in ```Bsmt.Qual``` means there is no basement, we'll replace ```NA``` with ```No``` and save it in a new column ```Bsmt.Qual.New```
+
+```{r}
+ames_train_bq <- ames_train %>% select(Bsmt.Qual)
+ames_train_bq <- sapply(ames_train_bq, as.character)
+ames_train_bq[is.na(ames_train_bq)] <- c("No")
+ames_train_bq[ames_train_bq==""] <- c("No")
+ames_train_bq <- data.frame(ames_train_bq)
+colnames(ames_train_bq) <- "Bsmt.Qual.New"
+ames_train <- cbind(ames_train, ames_train_bq)
+ames_train %>% group_by(Bsmt.Qual.New) %>% summarise(count=n())
+```
+
+All ```NA's``` are removed. We can proceed with model.
+
+### Section 2.1 An Initial Model
+* * *
+
+```{r fit_model}
+initial_model <- lm(log(price) ~ log(area) + log(Lot.Area) + age + Bldg.Type + Neighborhood + Sale.Type + Sale.Condition + Bsmt.Qual.New + Bedroom.AbvGr, data=ames_train)
+summary(initial_model)
+```
+
+#### Section 2.1.1 Model Variable Explanation/Discussion
+
+* log(area) - Main factor for the price determination with the co-eff ```0.6549554```
+* log(Lot.Area) - less important factor that log(area) with the co-eff ```0.0668661```
+* Neighborhoods like 'Crawfor', 'Greens', 'Grnhill', 'NoRidge', 'NridgHt', 'Somerst', 'StoneBr' and 'Timber' all has positive co-eff which will increase the price, thus making the places a bit expensive
+* Other than Sale.Type new, all others increases the housing price
+* BedRoom.AbvGr - Seems a good factor with the co-eff ```-0.0497919```
+* Bsmt.Qual.New - decreases the price
+* Sale.Condition increases the price other than the value ```Family```
+* Age - decreases the price with the co-eff ```0.0040712```
+* Adjusted R-squared value is ```0.8444``` which is a good indicator for the initial model, with value almost near to ```1```
+
+* * *
+
+### Section 2.2 Model Selection
+
+Now either using `BAS` another stepwise selection procedure choose the "best" model you can, using your initial model as your starting point. Try at least two different model selection methods and compare their results. Do they both arrive at the same model or do they disagree? What do you think this means?
+
+* * *
+
+#### Section 2.2.1 Model selection using BIC with a uniform prior
+```{r model_select_bic, message = FALSE, warnings = FALSE}
+initial_model_bic <- bas.lm(log(price) ~ log(area) + log(Lot.Area) + age + Bldg.Type + Sale.Type + Sale.Condition + Bsmt.Qual.New + Bedroom.AbvGr + Neighborhood,data = ames_train, prior = "BIC", modelprior = uniform())
+summary(initial_model_bic)
+image(initial_model_bic, rotate = FALSE)
+```
+
+As per the ```summary(initial_model_bic)```, we can notice that inclusion probability of ```Sale.Type``` variable is 0. So we can remove that from our model.
+
+Residuals vs Fitted model : Our model holds good as there is no much influence due to the outliers
+
+```{r}
+plot(initial_model_bic, which=1)
+```
+
+Inclusion Probabilities Model : Indicating that ```Sale.Type``` can be removed from the model
+
+```{r}
+plot(initial_model_bic, which=4)
+```
+
+#### Section 2.2.1 Model selection using AIC with a uniform prior
+```{r model_select_aic, message = FALSE, warnings = FALSE}
+initial_model_aic <- bas.lm(log(price) ~ log(area) + log(Lot.Area) + age + Bldg.Type + Sale.Type + Sale.Condition + Bsmt.Qual.New + Bedroom.AbvGr + Neighborhood,data = ames_train, prior = "AIC", modelprior = uniform())
+summary(initial_model_aic)
+image(initial_model_aic, rotate = FALSE)
+```
+
+As per the ```summary(initial_model_aic)```, we can notice that inclusion probability of ```Sale.Type``` variable is 0 in Model 1. So we can remove that from our model.
+
+Residuals vs Fitted model : Our model holds good as there is no much influence due to the outliers
+
+```{r}
+plot(initial_model_aic, which=1)
+```
+
+Inclusion Probabilities Model : Indicating that ```Sale.Type``` can be removed from the model because of the lower inclusion probability ```0.2145579```
+
+```{r}
+plot(initial_model_aic, which=4)
+```
+
+* * *
+
+#### Section 2.2.3 : Comparison of BIC and AIC
+
+Both the model's output are almost same (with same R2) and the result is to remove the variable ```Sale.Type```. But which is better? As we know that AIC will give penalty for the parameters far less than that of BIC for which the penalty is the number of observations. BIC is ```parsimonious```.
+
+From the above 2 summaries the inclusion probability of the variables
+
+variable name (with model)  | inclusion probability
+----------------------------|----------------------------
+log(Lot.Area) - BIC         | 9.875247e-01
+log(Lot.Area) - AIC         | 0.9987649
+Bldg.Type - BIC             | 6.698193e-11  
+Bldg.Type - AIC             | 0.2145579
+
+We can see that BIC has put more penalty for the variable ```Bldg.Type```. So we'll follow *BIC model*
+
+So our new preferred model is 
+```{r}
+initial_preferred_model <- lm(log(price) ~ log(area) + log(Lot.Area) + age + Bldg.Type + Neighborhood + Sale.Condition + Bsmt.Qual.New + Bedroom.AbvGr, data=ames_train)
+```
+
+### Section 2.3 Initial Model Residuals
+One way to assess the performance of a model is to examine the model's residuals. In the space below, create a residual plot for your preferred model from above and use it to assess whether your model appears to fit the data well. Comment on any interesting structure in the residual plot (trend, outliers, etc.) and briefly discuss potential implications it may have for your model and inference / prediction you might produce.
+
+* * *
+
+Distribution is ```normal``` around 0
+```{r}
+hist(initial_preferred_model$residuals, breaks=100)
+```
+
+Residuals are scattered around 0
+```{r model_resid}
+plot(initial_preferred_model$residuals, main="Residual distribution of the latest model from BIC")
+```
+
+#### Outliers
+
+Sorting based on the residuals, we'll get the outliers as
+
+```{r}
+ames_train[names(head(sort(initial_preferred_model$residuals), 10)),c("price","age", "area", "Lot.Area", "Bldg.Type", "Neighborhood", "Sale.Condition", "Bsmt.Qual.New", "Bedroom.AbvGr")]
+```
+
+* 6 out of 10 houses are more than the age 80
+* All ```Bldg.Type``` values are *1Fam1*
+* 7 out of 10 houses are sold not in the condition ```Normal```
+* 5 out of 10 houses has the basement quality ```TA```
+
+#### Trends
+
+```{r}
+ames_train[names(head(sort(initial_preferred_model$residuals, decreasing = TRUE), 10)),c("price","age", "area", "Lot.Area", "Bldg.Type", "Neighborhood", "Sale.Condition", "Bsmt.Qual.New", "Bedroom.AbvGr")]
+```
+
+* 7 out of 10 houses are sold in ```Normal``` condition
+* 9 out of 10 ```Bldg.Type``` values are *1Fam1*
+* 5 out of 10 houses has the basement quality ```TA```
+
+The major difference between the observed trend and outlier is the ```Sale.Condition```. Also it could be of different params, but it is the conclusion as per this model
+
+* * *
+
+### Section 2.4 Initial Model RMSE
+
+You can calculate it directly based on the model output. Be specific about the units of your RMSE (depending on whether you transformed your response variable). The value you report will be more meaningful if it is in the original units (dollars).
+
+* * *
+
+Since the price is in log, we'll use ```exp``` to get the original dollar values. And we use predict function for in-sample prediction. So the RMSE will be in dollars
+
+```{r model_rmse}
+initial_predicted_values <- exp(predict(initial_preferred_model))
+initial_residues <- ames_train$price - initial_predicted_values
+initial_rmse <- sqrt(mean(initial_residues^2))
+initial_rmse
+```
+
+* * *
+
+### Section 2.5 Overfitting 
+
+The process of building a model generally involves starting with an initial model (as you have done above), identifying its shortcomings, and adapting the model accordingly. This process may be repeated several times until the model fits the data reasonably well. However, the model may do well on training data but perform poorly out-of-sample (meaning, on a dataset other than the original training data) because the model is overly-tuned to specifically fit the training data. This is called ???overfitting.??? To determine whether overfitting is occurring on a model, compare the performance of a model on both in-sample and out-of-sample data sets. To look at performance of your initial model on out-of-sample data, you will use the data set `ames_test`.
+
+```{r loadtest, message = FALSE}
+load("ames_test.Rdata")
+```
+
+Use your model from above to generate predictions for the housing prices in the test data set.  Are the predictions significantly more accurate (compared to the actual sales prices) for the training data than the test data?  Why or why not? Briefly explain how you determined that (what steps or processes did you use)?
+
+* * *
+
+Checking for NA's and replacing them with 'No'
+
+```{r}
+ames_test <- ames_test %>% mutate(age=2018-Year.Built)
+
+c(dim(ames_test[which(is.na(ames_test$area)),])[[1]], dim(ames_test[which(is.na(ames_test$Lot.Area)),])[[1]], dim(ames_test[which(is.na(ames_test$price)),])[[1]], dim(ames_test[which(is.na(ames_test$age)),])[[1]], dim(ames_test[which(is.na(ames_test$Bldg.Type)),])[[1]], dim(ames_test[which(is.na(ames_test$Neighborhood)),])[[1]], dim(ames_test[which(is.na(ames_test$Sale.Type)),])[[1]], dim(ames_test[which(is.na(ames_test$Sale.Condition)),])[[1]], dim(ames_test[which(is.na(ames_test$Bsmt.Qual)),])[[1]]+dim(ames_test[which(ames_test$Bedroom.Qual == ""),])[[1]], dim(ames_test[which(is.na(ames_train$Bedroom.AbvGr)),])[[1]])
+
+
+ames_test_bq <- ames_test %>% select(Bsmt.Qual)
+ames_test_bq <- sapply(ames_test_bq, as.character)
+ames_test_bq[is.na(ames_test_bq)] <- c("No")
+ames_test_bq[ames_test_bq==""] <- c("No")
+ames_test_bq <- data.frame(ames_test_bq)
+colnames(ames_test_bq) <- "Bsmt.Qual.New"
+ames_test <- cbind(ames_test, ames_test_bq)
+```
+
+```{r initmodel_test}
+model_var_level <- names(initial_preferred_model$xlevels)
+initial_preferred_model$xlevels <- sapply(model_var_level, function(x) union(initial_preferred_model$xlevels[[x]], levels(ames_test[[x]])))
+predict_test_data <- exp(predict(initial_preferred_model, newdata=ames_test))
+initial_test_residue <- ames_test$price - predict_test_data
+initial_test_rmse <- sqrt(mean(initial_test_residue^2, na.rm = TRUE))
+initial_test_rmse
+```
+
+The RMSE difference between ```48191.67``` (for testing data) and ```31033.15``` (for training data) is very huge. This is due the potential outliers and the model has to be tuned to reduce the difference in the upcoming stages.
+
+
+Below is the residual comparison of the 2 data sets. We'll have a variable 'type' in the new data frame ```initial_residual_comparison``` which will indicate from where the data came from (whether it is training set or testing set). Value 1 is for training set and 2 for the testing set. 
+```{r}
+residual_comp1 <- data.frame(index<- seq(from=1, to=dim(ames_train)[1], by=1), residue <- initial_residues, type <- rep(1,dim(ames_train)[1]))
+residual_comp2 <- data.frame(index<- seq(from=1, to=dim(ames_test)[1], by=1), residue <- initial_test_residue, type <- rep(2,dim(ames_test)[1]))
+colnames(residual_comp1) <- c("index", "residue", "type")
+colnames(residual_comp2) <- c("index", "residue", "type")
+initial_residual_comparison <- rbind(residual_comp1, residual_comp2)
+ggplot(initial_residual_comparison, aes(x=index, y=residue)) + geom_point(aes(color=type, alpha=0.5))
+```
+
+We can observe that the testing set's residue are more dispersed than that of training set.
+
+* * *
+
+**Note to the learner:** If in real-life practice this out-of-sample analysis shows evidence that the training data fits your model a lot better than the test data, it is probably a good idea to go back and revise the model (usually by simplifying the model) to reduce this overfitting. For simplicity, we do not ask you to do this on the assignment, however.
+
+## Part 3 Development of a Final Model
+
+Now that you have developed an initial model to use as a baseline, create a final model with *at most* 20 variables to predict housing prices in Ames, IA, selecting from the full array of variables in the dataset and using any of the tools that we introduced in this specialization.  
+
+Carefully document the process that you used to come up with your final model, so that you can answer the questions below.
+
+```{r}
+#Function to replace NAs
+ames_transform <- function(data){
+	var_to_use <- data %>% summarise_all(funs(length(unique(.))))
+	var_to_use <- names(data.frame(var_to_use)[,var_to_use>1])
+
+	data <- data %>% select(var_to_use)
+
+	data_types <- split(names(data), sapply(data, function(x) paste(class(x), collapse = " ")))
+	data_int <- data %>% select(data_types$integer)
+
+	ames_train_fac <- data %>% select(data_types$factor)
+	ames_train_fac <- sapply(ames_train_fac, as.character)
+	ames_train_fac[is.na(ames_train_fac)] <- c("None")
+	ames_train_fac[ames_train_fac==""] <- c("None")
+	ames_train_fac <- data.frame(ames_train_fac)
+
+	data <- cbind(data_int, ames_train_fac)
+	data <- data %>% mutate(age= 2018 - Year.Built)
+
+	data$Year.Built <- NULL
+
+	return(data) 
+}
+```
+
+### Section 3.1 Final Model
+
+Provide the summary table for your model.
+
+* * *
+
+```{r model_playground}
+ames_train <- ames_transform(ames_train)
+
+final_lm <- lm(formula = log(price)~., data = na.omit(ames_train))
+n <- nrow(na.omit(ames_train))
+
+final_BIC <- stepAIC(final_lm, direction = "backward", k=n, trace = 0, steps = 1000)
+summary(final_BIC)
+
+final_AIC <- stepAIC(final_lm, direction = "backward", k=2, trace = 0, steps = 1000)
+summary(final_AIC)
+```
+
+Since BIC returns ```Overall.Qual``` as the significant predictor, we'll ignore BIC model and use the AIC model instead.
+
+And variables like below can be removed as the p-value with significance level of 5%
+
+* Garage.Type
+* Exter.Qual
+* Fireplaces
+* Lot.Frontage
+* Functional
+* Kitchen.Qual
+
+> Forward Selection of variables using AIC is done for the selection of better variables with the below code 
+
+```
+## R CODE to do the forward selection
+variables_chosen <- c()
+var_count = 0
+variables1 <- names(ames_train)
+variables2 <- names(ames_train)
+
+latest_AIC = 1/0
+
+for(vartest in variables1){
+	include_var = ""
+	found = FALSE
+	for(var in variables2){
+		if(var == "price" || var %in% variables_chosen){
+			next
+		}
+		if(var == "area"){
+			var = "log(area)"
+		}
+		temp_variables_chosen <- variables_chosen
+		temp_variables_chosen[[length(temp_variables_chosen)+1]] = var
+		tempAIC = AIC(lm(as.formula(paste("log(price) ~ ", paste(c(temp_variables_chosen), collapse="+"))), data=ames_train ))
+		if(tempAIC < latest_AIC){
+			latest_AIC = tempAIC
+			include_var = var;
+			found = TRUE
+		}
+	}
+	if(found){
+		var_count = var_count + 1
+		variables_chosen[[var_count]] = include_var
+	}
+}
+print(variables_chosen)
+print(latest_AIC)
+
+
+> print(variables_chosen)
+ [1] "Overall.Qual"   "log(area)"      "Neighborhood"   "BsmtFin.SF.1"   "Overall.Cond"   "age"            "Bldg.Type"      "Total.Bsmt.SF" 
+ [9] "Sale.Condition" "Condition.2"    "Exter.Cond"     "Bsmt.Exposure"  "MS.Zoning"      "Garage.Cars"    "Exterior.1st"   "Exter.Qual"    
+[17] "Condition.1"    "Bsmt.Full.Bath" "Central.Air"    "Lot.Shape"      "Garage.Cond"    "Bsmt.Qual"      "Garage.Qual"    "Kitchen.Qual"  
+[25] "Garage.Yr.Blt"  "Fireplaces"     "Lot.Config"     "Heating"        "Heating.QC"     "Sale.Type"      "Kitchen.AbvGr"  "Functional"    
+[33] "Year.Remod.Add" "Screen.Porch"   "Wood.Deck.SF"   "Foundation"     "X3Ssn.Porch"    "Bsmt.Cond"      "Bedroom.AbvGr"  "Paved.Drive"   
+[41] "Open.Porch.SF" 
+> print(latest_AIC)
+[1] -1485.826
+```
+
+Even then, when we use it for fitting the test data it is not enough. So with the knowledge obtained from the summary based on p-value from ```summary(final_AIC)``` and the above forward selection, we narrowed it to the below model after many iterations.
+
+```{r}
+aic_final_model <- stepAIC(lm(formula = log(price) ~ log(area) + Overall.Qual + X1st.Flr.SF + Kitchen.AbvGr + Garage.Cars + Enclosed.Porch +  Screen.Porch + MS.Zoning + Land.Slope + Neighborhood + Bldg.Type + Exterior.2nd + Bsmt.Qual + Central.Air + Sale.Condition + age, data = na.omit(ames_train)), direction = "backward", k=2, trace = 0, steps = 1000)
+summary(aic_final_model)
+```
+
+It has the Adjusted R-squared value as  ```.8875``` indicating that ```88.75``` of the price houses are explained by the included variables.
+
+* * *
+
+### Section 3.2 Transformation
+
+Did you decide to transform any variables?  Why or why not? Explain in a few sentences.
+
+* * *
+
+We have transformed some variables like ```area```, ```price``` and ```Lot.Area``` for the reasons mentioned in [section 2.1.4.1](#part-1.4.1-area-vs-price) and also the adjusted R squared value will be higher.
+```{r}
+summary(lm(formula= log(price)~Lot.Area, data = ames_train))$adj.r.squared < summary(lm(formula= log(price)~log(Lot.Area), data = ames_train))$adj.r.squared
+```
+* * *
+
+### Section 3.3 Variable Interaction
+
+Did you decide to include any variable interactions? Why or why not? Explain in a few sentences.
+
+* * *
+
+* We have created a new variable ```age``` [section 2.1.1 of EDA](#part-1.1-age-vs-price), as it will be easier to do the comparison between any numberical variables. One such relation has been shown in that section.
+* And also we removed NA values to 'None' for better model selection.
+* And we can check the collinearity between the variables and found to be that all the variables are not related to each other.
+
+```{r model_inter}
+pairs(~Overall.Qual + Overall.Cond + BsmtFin.SF.1 + Garage.Cars + Bsmt.Qual + age + area,data=ames_train, main="Colinearity Check")
+```
+
+* * *
+
+### Section 3.4 Variable Selection
+
+What method did you use to select the variables you included? Why did you select the method you used? Explain in a few sentences.
+
+* * *
+
+We'll use the variables which we have selected in the section 3.1. 
+But when we do the model for good data (i.e. with normal sale condition), we can see the increase in the Adjusted R-squared from ```0.8875``` to ```0.9087```. This means that without the outliers, the model can very well explain the house prices
+
+```{r model_select}
+ames_train_no_outliers <- ames_train %>% filter(Pool.QC != "None" | tolower(Sale.Condition) == "normal")
+no_outlier_final_model <- stepAIC(lm(formula = log(price) ~ log(area) + Overall.Qual + X1st.Flr.SF + Kitchen.AbvGr + Garage.Cars + Enclosed.Porch +  Screen.Porch + MS.Zoning + Land.Slope + Neighborhood + Bldg.Type + Exterior.2nd + Bsmt.Qual + Central.Air + age, data = na.omit(ames_train_no_outliers)), direction = "backward", k=2, trace = 0, steps = 1000)
+summary(no_outlier_final_model)
+```
+
+* * *
+
+### Section 3.5 Model Testing
+
+How did testing the model on out-of-sample data affect whether or how you changed your model? Explain in a few sentences.
+
+* * *
+
+```{r}
+final_predicted_values <- exp(predict(aic_final_model))
+final_residues <- ames_train$price - final_predicted_values
+final_rmse <- sqrt(mean(final_residues^2))
+final_rmse
+```
+
+While testing the model on the out-of-sample data, the RMSE value ```114854.5``` proved that the model predicts very poorly the house price. This could be due to 
+
+* Sale.Condition with all values, pushed it to be an non important variable (as we will see below in section 4.1)
+* Age of a house hasn't been taken into account
+* Many categorial values had ```NAs``` associated to it
+* Also there are many outliers associated with the data.
+
+Let's run the same for the final model (with outliers)
+
+```{r model_testing}
+  ames_test_transformed <- ames_transform(ames_test)
+  ames_test_transformed$Sale.Condition <- ames_test$Sale.Condition
+
+	model_var_level <- names(aic_final_model$xlevels)
+	aic_final_model$xlevels <- sapply(model_var_level, function(x) union(aic_final_model$xlevels[[x]], levels(ames_test_transformed[[x]])))
+	predict_test_data <- exp(predict(aic_final_model, newdata=ames_test_transformed))
+
+	final_test_residue <- ames_test_transformed$price - predict_test_data
+	final_test_rmse <- sqrt(mean(final_test_residue^2, na.rm = TRUE))
+	print(final_test_rmse)
+```
+
+The value of ```44150.01``` proves the model is very much improved.
+
+* * *
+
+## Part 4 Final Model Assessment
+
+### Section 4.1 Final Model Residual
+
+Right Skewness causes a nearly not-normal distribution with left half having less data. (check the below histogram)
+
+```{r}
+histogram(final_test_residue)
+```
+
+This is explained by
+
+* In the "Residual vs Fitted" plot, the first part of red line is just above 0 explaining the skewness. After that it is well maintained near zero.
+* Also Normal Q-Q shows the problem due to the outliers 
+
+```{r}
+plot(no_outlier_final_model)
+```
+
+
+
+### Section 4.2 Final Model RMSE
+
+For your final model, calculate and briefly comment on the RMSE.
+
+* * *
+
+When we try to find the RMSE for the no-outlier model, the value is decreased, indicating that we can use it for the prediction of non-outliers.
+
+```{r}
+	model_var_level <- names(no_outlier_final_model$xlevels)
+	no_outlier_final_model$xlevels <- sapply(model_var_level, function(x) union(no_outlier_final_model$xlevels[[x]], levels(ames_test_transformed[[x]])))
+	predict_test_new_data <- exp(predict(no_outlier_final_model, newdata=ames_test_transformed))
+
+	final_test_residue_no_outlier <- ames_test_transformed$price - predict_test_new_data
+	final_test_rmse_no_outlier <- sqrt(mean(final_test_residue_no_outlier^2, na.rm = TRUE))
+	print(final_test_rmse_no_outlier)
+```
+
+
+The below plot shows that type 2 (of ```final_test_residue_no_outlier```) is well around 0 compared to the type 1 (of ```final_residues```). The residues are much less scatterd than the training data compared to the plot which we have seen in [Section 2.5](#section-2.5-overfitting)
+
+This shows the good sign of the model
+
+```{r}
+
+residual_comp1 <- data.frame(index<- seq(from=1, to=dim(ames_train)[1], by=1), residue <- final_residues, type <- rep(1,dim(ames_train)[1]))
+residual_comp2 <- data.frame(index<- seq(from=1, to=dim(ames_test_transformed)[1], by=1), residue <- final_test_residue_no_outlier, type <- rep(2,dim(ames_test_transformed)[1]))
+colnames(residual_comp1) <- c("index", "residue", "type")
+colnames(residual_comp2) <- c("index", "residue", "type")
+initial_residual_comparison <- rbind(residual_comp1, residual_comp2)
+ggplot(initial_residual_comparison, aes(x=index, y=residue)) + geom_point(aes(color=type, alpha=0.5))
+```
+
+
+
+```{r}
+final_interval_prediction <- exp(predict(no_outlier_final_model, interval="prediction", newdata=ames_test_transformed))
+percentage_covered <- mean(ames_test_transformed$price > final_interval_prediction[,"lwr"] & ames_test_transformed$price < final_interval_prediction[,"upr"], na.rm = TRUE)
+percentage_covered
+```
+
+```82.86%``` of the housing prices are well reasoned by the variables.
+
+* * *
+
+### Section 4.3 Final Model Evaluation
+
+What are some strengths and weaknesses of your model?
+
+* * *
+#### Section 4.3.1 Strengths
+
+* 95 % Prediction interval is narrow. 
+* Very few outliers and on removing them lead to smaller RMSE and very strong model to validate other data.
+* The model was build by automated AIC functions and knowledge gathered from manual written Forward selection of variables with AIC. This lead to well computed model.
+
+#### Section 4.3.2 Weakness
+
+* With outliers, the model could predict wrong values
+* The coverage of 82.86% can be well increased as we are losing around ```17.14%``` explanation
+* Final RMSE ```38312.02``` is still high. 
+
+
+* * *
+
+### Section 4.4 Final Model Validation
+
+Testing your final model on a separate, validation data set is a great way to determine how your model will perform in real-life practice. 
+
+You will use the "ames_validation" dataset to do some additional assessment of your final model. Discuss your findings, be sure to mention:
+* What is the RMSE of your final model when applied to the validation data?  
+* How does this value compare to that of the training data and/or testing data?
+* What percentage of the 95% predictive confidence (or credible) intervals contain the true price of the house in the validation data set?  
+* From this result, does your final model properly reflect uncertainty?
+
+```{r loadvalidation, message = FALSE}
+load("ames_validation.Rdata")
+```
+
+* * *
+
+```{r model_validate}
+ames_validation_transformed <- ames_transform(ames_validation)
+ames_validation_transformed$Sale.Condition <- ames_validation$Sale.Condition
+
+model_var_level <- names(no_outlier_final_model$xlevels)
+no_outlier_final_model$xlevels <- sapply(model_var_level, function(x) union(no_outlier_final_model$xlevels[[x]], levels(ames_validation[[x]])))
+predict_validation_data <- exp(predict(no_outlier_final_model, newdata=ames_validation_transformed))
+
+validation_residue <- ames_validation$price - predict_validation_data
+validation_rmse <- sqrt(mean(validation_residue^2, na.rm = TRUE))
+validation_rmse
+```
+
+
+The RMSE of ```51398.32``` shows that the model can still be improved. This is due the outliers present as below
+```{r}
+plot(ames_validation_transformed$price)
+```
+
+Let's remove the most priced 20 data and try again
+
+```{r}
+ames_validation_transformed2 <- ames_validation_transformed[-head(order(ames_validation_transformed$price, decreasing = T), n=20),]
+model_var_level <- names(no_outlier_final_model$xlevels)
+no_outlier_final_model$xlevels <- sapply(model_var_level, function(x) union(no_outlier_final_model$xlevels[[x]], levels(ames_validation_transformed2[[x]])))
+predict_validation_data <- exp(predict(no_outlier_final_model, newdata=ames_validation_transformed2))
+
+validation_residue <- ames_validation_transformed2$price - predict_validation_data
+validation_rmse <- sqrt(mean(validation_residue^2, na.rm = TRUE))
+validation_rmse
+```
+
+Now the value is decreased to ```47149.05``` as a good sign. 
+
+
+Also check the residue comparison plot. It shows that the predicted residues are in the same disperse level as the training data.
+
+```{r}
+residual_comp1 <- data.frame(index<- seq(from=1, to=dim(ames_train)[1], by=1), residue <- final_residues, type <- rep(1,dim(ames_train)[1]))
+residual_comp2 <- data.frame(index<- seq(from=1, to=dim(ames_validation_transformed2)[1], by=1), residue <- validation_residue, type <- rep(2,dim(ames_validation_transformed2)[1]))
+colnames(residual_comp1) <- c("index", "residue", "type")
+colnames(residual_comp2) <- c("index", "residue", "type")
+initial_residual_comparison <- rbind(residual_comp1, residual_comp2)
+ggplot(initial_residual_comparison, aes(x=index, y=residue)) + geom_point(aes(color=type, alpha=0.5))
+```
+
+
+```{r}
+validation_interval_prediction <- exp(predict(no_outlier_final_model, interval="prediction", newdata=ames_validation_transformed2))
+percentage_covered <- mean(ames_validation_transformed2$price > validation_interval_prediction[,"lwr"] & ames_validation_transformed2$price < validation_interval_prediction[,"upr"], na.rm = TRUE)
+percentage_covered
+```
+
+```76.48%``` of the housing prices are well reasoned by the variables.
+
+
+* * *
+
+## Part 5 Conclusion
+
+Provide a brief summary of your results, and a brief discussion of what you have learned about the data and your model. 
+
+* * *
+
+Overvalued vs Undervalues price vs area comparison. The values are determined from the IQR percentile of the house prices
+
+```{r}
+undervalued = summary(ames_validation_transformed$price)[[2]]
+undervalued_data <- ames_validation_transformed2[which(ames_validation_transformed$price <= undervalued),] %>% select(area,price,Neighborhood)
+undervalued_data$type <- "undervalued"
+colnames(undervalued_data) <- c("area", "price", "Neighborhood", "type")
+overvalued = summary(ames_validation_transformed$price)[[5]]
+overvalued_data <- ames_validation_transformed2[which(ames_validation_transformed$price >= overvalued),] %>% select(area,price,Neighborhood)
+overvalued_data$type <- "overvalued"
+colnames(overvalued_data) <- c("area", "price", "Neighborhood", "type")
+misfit <- rbind(overvalued_data,undervalued_data)
+suppressWarnings(ggplot(data=misfit, aes(x=log(area), y=log(price), color=factor(type), shape=factor(type))) + geom_point())
+```
+
+Count of undervalued and overvalues home in Neighborhood
+
+```{r}
+misfit %>% filter(!is.na(price)) %>% group_by(Neighborhood) %>% summarise(undervalued_count = sum(ifelse(type == "undervalued", 1, 0))) %>% arrange(desc(undervalued_count)) %>% slice(1:10)
+misfit %>% filter(!is.na(price)) %>% group_by(Neighborhood) %>% summarise(overvalued_count = sum(ifelse(type == "overvalued", 1, 0))) %>% arrange(desc(overvalued_count)) %>% slice(1:10)
+```
+
+* * *
+
+### Findings
+
+* Model which we have derived can still be improved by removing more unwanted values as we witnessed through out the document and that will also increase the probability coverage
+* Even though we thought that BIC was good due to apply of the penalty, it turned out that AIC was better in finding the model
+* If we have many variables, ```bas.lm``` was not usable because of 2^n combinations and we have step in for finding the best model. Also we need to take care of Forwards/Backward selection of variables using adj-R-squared/BIC/AIC (whatever be the types) as it involves more variables
+* Three main variables are ```area```, ```Overall.Qual```, ```MS.Zoning``` and ```age```
+* log of the variables ```area```, ```price``` has to be applied to make sure that the model is good
+* As the model is fit based on the skewness of the residual distribution, the model would behave differently for different data set
+* Normal distribution helps in the appropriate finding of the response variable

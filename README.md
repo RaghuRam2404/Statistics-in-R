@@ -1,5 +1,5 @@
-# Statistics-in-R
-Statistics in R - Duke University
+# Statistics-with-R
+Statistics with R - Duke University
 
 Project Links: <br />
 Course 1 : [Intro to Probability and data](https://s3.amazonaws.com/coursera-uploads/peer-review/e9111a3d843a7213f54421f04d9ce267/intro_data_prob_project.html)<br />
